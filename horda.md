@@ -1,102 +1,74 @@
-# Scenariusz 3: Kroniki Rubieży — Horda i Ekspedycje (v3.3 — 4P Co-op RPG/RTS)
+# Scenariusz 3: Kroniki Rubieży — Horda i Ekspedycje (v5.2 — 4P Co-op RPG/RTS)
 
 **Plik scenariusza:** `Kroniki_Rubiezy_Horda_Coop.aoe2scenario`  
-**Typ rozgrywki:** Obrona przed 12 rosnącymi falami zmutowanej Hordy + Eksploracja, 4 Questy poboczne i niszczenie 6 Settlementów (Grades 1–3)  
+**Typ rozgrywki:** Obrona przed 14 falami Hordy + Eksploracja, 4 Questy dające stałe perki cywilizacyjne i niszczenie 6 Settlementów (Grades 1–3)  
+**Horyzont czasowy partii:** 60–90 minut  
 **Rozmiar mapy:** 200×200 (Olbrzymia)  
-**Wymagane mody zewnętrzne:** Brak (wszystkie 6 klas zmodyfikowanych jednostek, lista zadań UI, opisy w menu gry oraz lokalne aury są wbudowane bezpośrednio w plik scenariusza)
 
 ---
 
 ## 1. Opis rozgrywki i układ Twierdzy Sojuszu
 
-Wszyscy 4 gracze startują na **równych, symetrycznych warunkach** (500 żywności, 600 drewna, 400 złota, 300 kamienia, 200 limitu populacji, 6 wieśniaków i 1 skaut) wewnątrz rozległej Twierdzy Sojuszu w południowo-zachodniej części mapy:
+Wszyscy 4 gracze startują na równych warunkach (500 żywności, 600 drewna, 400 złota, 300 kamienia, 6 wieśniaków i 1 skaut) wewnątrz rozległej Twierdzy Sojuszu w południowo-zachodniej części mapy:
 
-* **Wspólna wizja od 1. sekundy:** Wszyscy gracze mają od startu zbadaną **Kartografię** — widzicie swoje bazy i ruchy sojuszników bez konieczności budowania Targowiska.
-* **Przestronne bazy i zapas drewna:** Town Center graczy są oddalone od siebie o 38–45 kratek. Każdy gracz posiada **2 własne lasy bezpośrednio przy TC**, a wzdłuż zachodniej i południowej ściany Twierdzy ciągnie się **Puszcza Zaplecza** dochodząca do samej krawędzi mapy.
-* **Trzy ufortyfikowane przełęcze:** Twierdza posiada 3 wejścia:
-  1. **Brama Północna** `(48, 100)`
-  2. **Brama Centralna** `(104, 114)`
-  3. **Brama Wschodnia** `(104, 162)`  
-  Na starcie każda przełęcz jest zamknięta **Wzmocnioną Palisadą (+400 HP)** z **Bramą Palisadową** i **2 Wieżami Strażniczymi** po wewnętrznej stronie, szczelnie połączoną ze ścianą lasu.
-* **Serce Twierdzy (Cytadela Sojuszu):** W centrum Twierdzy `(54, 146)` stoi **Cytadela Sojuszu (wzmocniona Feitoria +5000 HP)**. Jej utrata oznacza porażkę całej drużyny (budynek nie uruchamia licznika 350 lat jak zwykły Cud).
-
-### Czytelność i nawigacja w trakcie meczu
-1. **Kompaktowa lista celów (Objectives w prawym górnym rogu):** Wyświetla we właściwej kolejności 4 Questy poboczne oraz 6 Settlementów Hordy. Zrealizowane cele są automatycznie przekreślane.
-2. **Punktowa widoczność celów z zachowaniem Mgły Wojny:** Mapa jest spowita normalną Mgłą Wojny (*Fog of War*), ale nad samymi budynkami 4 Questów i 6 Settlementów znajdują się punktowe odsłaniacze (promień 10 kratek). Od `0:00` widzicie każdy cel, możecie na niego kliknąć i przeczytać jego podpis na dolnym pasku.
-3. **Wbudowany poradnik w menu gry:** Pełny opis zasad, bestiariusz i lista nagród są zapisane wewnątrz pliku scenariusza — w każdej chwili możesz je sprawdzić w grze w zakładkach **Instructions / Hints / Scouts**.
+* **Wspólna wizja i stały podgląd celów (`LOS = 4`):** Wszyscy gracze mają od startu zbadaną **Kartografię**. Nad samym środkiem każdego budynku Questu i Settlementu wisi stały punktowy odsłaniacz o minimalnym zasięgu (`4` kratki), dzięki czemu w każdej chwili możecie kliknąć na budynek zadania i sprawdzić jego opis, podczas gdy reszta mapy pozostaje pod Mgłą Wojny.
+* **Cytadela Sojuszu (Feitoria Gracza 2):** W centrum Twierdzy `(54, 146)` stoi wzmocniona **Feitoria należąca do Gracza 2** (+3000 HP oraz +20 limitu populacji dla Gracza 2). Jej utrata oznacza porażkę drużyny.
+* **Trzy przełęcze bojowe + Brama Handlowa:** Brama Północna `(48, 100)`, Centralna `(104, 114)`, Wschodnia `(104, 162)` oraz Południowa Brama Handlowa `(104, 193)` są na starcie zamknięte pełną **Wzmocnioną Palisadą (+400 HP)** z **Bramą Palisadową** i **2 Wieżami Strażniczymi** (bez sztucznych klifów zwężających wejście).
+* **Działanie Mnichów:** Mnisi graczy (`P1–P4`) działają w 100% normalnie (mogą leczyć sojuszników i konwertować zwykłe jednostki wroga). Mnisi komputerowi (`P5–P8`) mają zablokowaną konwersję, natomiast Arcymagowie (`P7`) leczą pobliskie jednostki Hordy obszarowo (+15 HP co 3s).
 
 ---
 
-## 2. Harmonogram fal i stopniowe wprowadzanie jednostek specjalnych
+## 2. Harmonogram fal i trzystopniowe skalowanie pod grę 60–90 min
 
-* **Pierwsza fala:** Uderza w **10:00**. Kolejne fale nadchodzą **co 3 minuty**. Po każdym uderzeniu macie **~2,5 minuty Okna Ekspedycyjnego** na wyjście armią w otwarte pole.
-* **Globalna Eskalacja Hordy:** Rozpoczyna się dopiero **po pierwszym ataku** (pierwszy bonus w **14:00**, a potem co 4 minuty) — każdorazowo dodaje wszystkim jednostkom bojowym wroga **+25 HP i +2 Ataku**.
-* **Etapowe wprowadzanie jednostek i technologii (Feudal -> Castle -> Imperial):**
-  * **Fala 1 (`10:00` — Feudal Age):** Czysto feudalna armia (Zbrojni, Łucznicy, Skauci + 1 zwykły Taran) z ulepszeniami `+1` w Kuźni. **Brak jednostek specjalnych.**
-  * **Fala 2 (`13:00` — Późny Feudal):** Armia feudalna wsparta pierwszymi pojedynczymi specjalistami: **2 Berserkerów** (Północ) i **2 Snajperów**.
-  * **Fala 3 (`16:00` — Wczesny Castle Age):** Trzon armii przechodzi w Castle Age (Pikinierzy, Kusznicy, Rycerze, Huskarlowie, ulepszenia `+2` i Balistyka) + pierwsze pojedyncze **jednostki Kamikaze** (2 Petardy i 2 Płonące Wielbłądy).
-  * **Fala 4 (`19:00` — Środkowy Castle Age):** Debiut pierwszego **Arcymaga Tarczy (1 Imam + 2 Szamanów)** na Bramie Centralnej.
-  * **Fala 5 (`22:00` — Późny Castle Age):** Debiut pojedynczego **Kolosa Oblężniczego (22 zasięgu)** na północy.
-  * **Fala 6 (`25:00` — Przełom Castle/Imperial):** Debiut pierwszych **Tytanów Hordy (Słonie Bojowe 1400 HP)**.
-  * **Fale 7–12 (`28:00 – 43:00+` — Imperial Age + tryb Endless):** Pełna armia Imperialna z ulepszeniami `+3` i rosnącą liczbą wszystkich 6 klas mutantów. Od 43. minuty Fala 12 powtarza się cyklicznie co 3 minuty, a co 4 minuty nadal rośnie HP i atak wroga.
+* **Fala 1 (8:30):** Szturm Feudalny **bez taranów i bez jednostek specjalnych** (po 11 jednostek piechoty/łuczników/skautów na bramę — wymusza dorobienie pierwszych jednostek, bo same wieże nie utrzymają palisady).
+* **Fala 2 (13:00):** Szturm Feudalny **z pierwszym Taranem i Mangonelem, ale nadal bez jednostek specjalnych**.
+* **Fala 3 (18:00) i kolejne fale (4–14) co 5,5 minuty (330 sekund):** Od 18. minuty zaczynają stopniowo wchodzić jednostki specjalne.
+* **Trzystopniowa Eskalacja Hordy (równoważąca potężne perki z Questów):**
+  * **Od 20:00 (Bieg 1):** Co 5 minut jednostki bojowe Hordy otrzymują **+5 HP i +1 Ataku**.
+  * **Od 45:00 (Bieg 2 — Late-Game):** Co 5 minut dochodzi dodatkowe **+9 HP i +1 Ataku**.
+  * **Od 55:00 (Bieg 3 — Endgame):** Co 5 minut dochodzi kolejne **+10 HP i +2 Ataku**, a każdy ukończony przez Was Quest i zburzony Settlement dodatkowo wzmacnia pozostałe siły Hordy.
 
 ---
 
-## 3. Bestiariusz Hordy — 6 klas zmodyfikowanych jednostek wroga
+## 3. Bestiariusz Hordy — 6 wyspecjalizowanych klas jednostek (z Poświatą Bohatera)
 
-| Jednostka specjalna (Od której fali) | Frakcja / Pochodzenie | Zmodyfikowane statystyki i zachowanie | Jak kontrować? |
-| :--- | :--- | :--- | :--- |
-| **1. Berserkerzy Szturmowi** *(od Fali 2 — 13:00)* | **P5 (Turkusowy)** — Obóz Północny (G1) | **Prędkość `1.45`** (biegają jak jazda), **320 HP**, **+18 ataku wręcz**, **0 pancerza na strzały**. | Rozstrzeliwać łucznikami/kusznikami zanim dobiegną do zwarcia. |
-| **2. Snajperzy** *(od Fali 2 — 13:00)* | **P6 (Fioletowy)** — Akademia Artylerii (G2) | **20 zasięgu** (więcej niż Zamki), **+110 ataku**, strzał co **6,0 s**, **140 HP**. | Szybki wypad lekką jazdą lub rycerzami na tyły kolumny wroga. |
-| **3. Fanatycy Kamikaze i Płonące Wielbłądy** *(od Fali 3 — 16:00)* | **P5 (Turkusowy)** — Obozy Przednie (G1) | **+65% prędkości ruchu**, **220 HP**, **promień wybuchu 2,5 kratki**, **+120 obrażeń**. | Zestrzelić na podejściu lub podstawić pojedynczą tanią jednostkę przed murem/szykiem. |
-| **4. Arcymagowie Tarczy i Szamani Krwi** *(od Fali 4 — 19:00)* | **P7 (Szary)** — Klasztor Arcymagów (G2) | **550 HP (Mag) / 280 HP (Szaman)**. **Lokalna Aura (tylko 25 kratek wokół Bramy Centralnej):** daje wojskom P7 **+60/60 Pancerza** (otrzymują tylko 1 dmg) i leczy **+100 HP co 2s**. | Gdy Mag wchodzi w strefę 25 kratek, gra puszcza na niego flarę. Wyfokusować i zabić Imama — jego śmierć natychmiast zdejmuje barierę. |
-| **5. Kolosy Oblężnicze** *(od Fali 5 — 22:00)* | **P6 (Fioletowy)** — Akademia Artylerii (G2) | **22 zasięgu**, **850 HP**, **+90 ataku**, **promień wybuchu 2,8 kratki**, ale strzelają raz na **10 s** i jadą wolno (`0.4`). | Obserwować lecące pociski i rozpraszać szyk, po czym wjechać jazdą w ich martwą strefę. |
-| **6. Tytani Hordy** *(od Fali 6 — 25:00)* | **P8 (Pomarańczowy)** — Cytadele Hordy (G3) | **1400 HP**, **+25 ataku wręcz**, **tratowanie obszarowe (1,5 kratki)**. | Masować halabardników lub konwertować mnichami. |
-
----
-
-## 4. Cztery Questy poboczne w otwartym polu
-
-Każdy Quest jest chroniony przez garnizon pojawiający się w momencie podejścia Waszego oddziału (min. 5 jednostek). Aby odebrać nagrodę dla całej czwórki, należy **zburzyć budynek Questu do 0 HP**:
-
-1. **`Q1 - Karawanseraj (zasoby + handel)` — Wrogie Targowisko `(154, 182)`:**
-   * **Nagroda:** **+500 Złota** dla każdego, **po 3 darmowe Wozy Handlowe** oraz utworzenie 2 sojuszniczych Targowisk w rogu mapy `(152–158, 190)` pod bezpieczny szlak handlowy.
-2. **`Q2 - Klif Artylerii (ulepszenia + atak)` — Wrogie Uniwersytet `(28, 32)`:**
-   * **Nagroda:** Darmowe zbadanie **Balistyki, Chemii, Inżynierów Oblężniczych i Thumb Ring** oraz stały bonus **+4 Ataku i +12% prędkości ruchu** dla jazdy i strzelców wszystkich graczy.
-3. **`Q3 - Skarbiec (zasoby + staly dochod)` — Wrogie Krepost za murami `(142, 118)`:**
-   * **Nagroda:** **+400 Żywności, Drewna i Złota** od ręki ORAZ uruchomienie pasywnego dochodu (**+120 Żywności, +120 Drewna i +100 Złota co minutę** dla każdego gracza do końca gry).
-4. **`Q4 - Krwawy Oltarz (+50 HP i slabsi Magowie)` — Wrogie Klasztor `(105, 20)`:**
-   * **Nagroda:** Zmniejsza maksymalne HP wrogich Magów o **80%** (z 550 do 120 HP) i daje Waszym jednostkom bojowym **+50 Max HP**.
+| Jednostka specjalna (Od której minuty) | Rola i specjalizacja | Sposób pokonania / Kontra |
+| :--- | :--- | :--- |
+| **1. Taran-Żółw / Żelazny Słoń** *(od 34:30 — Słoń Bojowy P8)* | **Tank i Niszczyciel Budynków:** **1450 HP**, **+10/+12 pancerza**, **odporny na konwersję**. Ma **+220 obrażeń przeciwko budynkom i murom**, ale zadaje **tylko 3 obrażenia jednostkom**! | W walce z Waszą armią jest niegroźny — zignorujcie go, wybijcie resztę fali, a potem otoczcie Halabardnikami (+60 bonus dmg) zanim dojdzie do zamków. |
+| **2. Szakale Dywersyjne** *(od 18:00 — Huzarzy P7)* | **Eco-Raiders (Rozproszenie uwagi):** Prędkość **`1.62`**, **+6 pancerza na strzały**, ale **tylko 2 ataku**. Otrzymują rozkaz `Move` prosto w linie drwali i farm pod Waszymi 4 Town Center! | Jeśli brama jest otwarta lub uszkodzona, omijają front i wjeżdżają w wieśniaków. Schowajcie chłopów do TC i cofnijcie kilku rycerzy/pikinierów. |
+| **3. Arcymag Tarczy** *(od 23:30 — Imam P7)* | **Globalny Support Hordy:** W promieniu 25 kratek przed Bramą Centralną daje **+30/+30 Pancerza i leczy (+15 HP/3s) wszystkie 4 frakcje Hordy (P5–P8)**! Nie konwertuje. | Ma złotą poświatę, a co 8 sekund gra puszcza **flarę na jego pozycję**. Ma **240 HP**, **3/4 pancerza** i **regenerację 5 HP/s** — skupcie na nim ogień, by go dobić i zdjąć tarczę z całej Hordy. |
+| **4. Moździerz Oblężniczy** *(od 29:00 — Onager P6)* | **Artyleria Dalekosiężna:** **350 HP**, **21 zasięgu**, **+75 ataku**, promień wybuchu **2,6 kratki**. | **Martwa strefa 6 kratek (`Minimum Range = 6`)** oraz strzał raz na **10 s**. Nie może strzelać do celów bliższych niż 6 kratek — po dojechaniu jazdą w zwarciu jest bezbronny. |
+| **5. Snajperzy Imperialni** *(od 18:00 — Janczarzy P6)* | **Egzekutor pojedynczych celów:** **90 HP**, **19 zasięgu**, **+85 ataku** (~107 dmg w jeden cel). | Strzelają co **6,5 s** i nie mają obrażeń obszarowych — zasypcie ich grupą tanich jednostek lub dojedźcie kawalerią. |
+| **6. Berserkerzy i Kamikaze** *(od 18:00 — P5)* | **Szturmowcy i Saperzy:** Szybcy (`1.40–1.50`), wysoki atak wręcz / wybuch obszarowy `2,4`. | Posiadają **0 pancerza przeciw strzałom** — wycinajcie ich łucznikami i kusznikami zanim dobiegną. |
 
 ---
 
-## 5. Sześć Settlementów Hordy (Grades 1–3) i „Furia Hordy”
+## 4. Cztery Questy poboczne (Chronione garnizonem na smyczy terytorialnej)
 
-Zburzenie głównego budynku (Wieży lub Zamku) w danym Settlemencie **trwale wyłącza jego jednostki z kolejnych fal** i daje każdemu graczowi **+500 Złota i +500 Żywności**, **ALE** uruchamia **Furię Hordy** (pozostałe obozy otrzymują stały bonus **+30 HP i +2 Ataku** oraz wysyłają natychmiastowy kontratak na Bramę Centralną):
+Każdy Quest jest chroniony przez wieże oraz garnizon, który spawnuje się przy zbliżeniu nawet pojedynczego skauta i trzyma się w promieniu 9 kratek od budynku:
 
-* **`G1 - Polnocny` `(76, 72)` — Wieża Strażnicza:** Usuwa z fal Berserkerów i Petardy Kamikaze.
+1. **`Q1 - Karawanseraj (Mur Handlowy, +30 Pop, +20% Eko)` — Targowisko `(154, 190)`:**
+   * **Automatycznie buduje ciągły Mur Obronny (`Fortified Wall`) z 6 Basztami (`Keep`)** wzdłuż dolnej krawędzi mapy (od ściany lasu Twierdzy `x=105` aż do prawego rogu mapy `x=199`) oraz stawia 2 sojusznicze Targowiska na `(193, 193)`, tworząc bezpieczny, 180-kratkowy korytarz handlowy!
+   * Daje **+30 Limit Populacji na stałe** (`230 pop`), **+20% szybszą pracę Wieśniaków**, po 4 szybkie Wozy Handlowe i +500 Złota.
+2. **`Q2 - Klif Artylerii (+2 Zasiegu, +4 Ataku, Szybkosc)` — Uniwersytet `(28, 32)`:**
+   * Darmowa **Balistyka, Chemia, Inżynierowie Oblężniczy i Thumb Ring**,
+   * **+2 Maksymalnego Zasięgu i +4 Ataku** dla wszystkich jednostek strzeleckich,
+   * **+12% Prędkości Ruchu i +4 Ataku** dla całej kawalerii.
+3. **`Q3 - Skarbiec (+20 Pop i Duzy Staly Dochod)` — Krepost za murami `(142, 118)`:**
+   * **+20 Limit Populacji na stałe** (razem z Q1 daje **250 limitu populacji** na osobę!),
+   * **Duży stały przychód co minutę:** **+250 Żywności, +250 Drewna, +200 Złota i +40 Kamienia co 60 sekund** dla każdego z 4 graczy.
+4. **`Q4 - Krwawy Oltarz (+30% HP Armii i +40% Produkcji)` — Klasztor `(105, 20)`:**
+   * **+30% Max HP oraz +2/+2 Pancerza** dla wszystkich jednostek piechoty, jazdy i strzelców graczy,
+   * **+40% szybsza produkcja wojska** w Koszarach, Stajniach, Strzelnicach i Zamkach oraz obniżenie HP wrogich Arcymagów do 140 HP.
+
+---
+
+## 5. Sześć Settlementów Hordy (Grades 1–3)
+
+Zburzenie głównego budynku (Wieży lub Zamku) w danym Settlemencie **trwale wyłącza jego jednostki z kolejnych fal**, daje każdemu graczowi **+600 Złota i +600 Żywności**, wywołuje kontratak i wzmacnia pozostałe obozy o **+15 HP oraz +2 Ataku**:
+
+* **`G1 - Polnocny` `(76, 72)` — Wieża Strażnicza:** Usuwa z fal Berserkerów i Petardy.
 * **`G1 - Wschodni` `(132, 152)` — Wieża Strażnicza:** Usuwa z fal Huskarlów i Płonące Wielbłądy.
-* **`G2 - Akademia` `(68, 34)` — Zamek P6:** **Trwale usuwa z gry Snajperów i Kolosy Oblężnicze!**
-* **`G2 - Klasztor` `(148, 72)` — Zamek P7:** **Trwale usuwa z gry Magów Tarczy i Szamanów!**
-* **`G3 - Cytadela Pln.` `(142, 24)` oraz `G3 - Cytadela Wsch.` `(176, 56)` — Główne Zamki P8:** Usuwają Tytanów Słoniowych. Zburzenie wszystkich 6 Settlementów daje zwycięstwo!
-
----
-
-## 6. Warunki uruchomienia w lobby (Konfiguracja)
-
-W menu gry wybierz: **Multiplayer -> Host Game -> Game Mode: Custom Scenario -> `Kroniki_Rubiezy_Horda_Coop`**.
-
-| Slot / Kolor | Typ gracza | Pozycja w Twierdzy | Drużyna | Rekomendowana cywilizacja |
-| :--- | :--- | :--- | :--- | :--- |
-| **1 (Niebieski)** | **Człowiek** | Północny-Wschód Twierdzy `(76, 124)` — blisko Bramy Centralnej | Drużyna 1 | Dowolna (start w pełni symetryczny) |
-| **2 (Czerwony)** | **Człowiek** | Południowy-Zachód Twierdzy `(32, 164)` — zaplecze leśne | Drużyna 1 | Dowolna |
-| **3 (Zielony)** | **Człowiek** | Północny-Zachód Twierdzy `(32, 122)` — blisko Bramy Północnej | Drużyna 1 | Dowolna |
-| **4 (Żółty)** | **Człowiek** | Południowy-Wschód Twierdzy `(76, 168)` — blisko Bramy Wschodniej | Drużyna 1 | Dowolna |
-| **5 (Turkusowy)** | **AI (Extreme)** | Obozy Przednie (Grade 1 — Berserkerzy i Kamikaze) | Drużyna 2 | Goci lub Wikingowie |
-| **6 (Fioletowy)** | **AI (Extreme)** | Akademia Artylerii (Grade 2 — Snajperzy i Kolosy) | Drużyna 2 | Turcy |
-| **7 (Szary)** | **AI (Extreme)** | Klasztor Arcymagów (Grade 2 — Magowie i Szamani) | Drużyna 2 | Saraceni lub Hiszpanie |
-| **8 (Pomarańczowy)**| **AI (Extreme)** | Cytadele Hordy (Grade 3 — Tytani i Paladyni) | Drużyna 2 | Persowie lub Khmerzy |
-
-* **Widoczność mapy (Map Visibility):** **Normalna (Normal)** — zachowuje klimatyczną Mgłę Wojny, podczas gdy same budynki Questów i Settlementów są punktowo odsłonięte przez scenariusz.
-* **Limit populacji:** **200**.
-* **Zablokuj drużyny (Lock Teams):** **Wyłączone** (dyplomację i Kartografię ustawia trigger w 1. sekundzie).
+* **`G2 - Akademia` `(68, 34)` — Zamek P6:** **Trwale usuwa z gry Snajperów i Moździerze Oblężnicze!**
+* **`G2 - Klasztor` `(148, 72)` — Zamek P7:** **Trwale usuwa z gry Arcymagów Tarczy i Szakale Dywersyjne!**
+* **`G3 - Cytadela Pln.` `(142, 24)` oraz `G3 - Cytadela Wsch.` `(176, 56)` — Główne Zamki P8:** Usuwają Żelazne Słonie-Tanki. Zburzenie wszystkich 6 Settlementów daje zwycięstwo!

@@ -16,21 +16,24 @@ TREE_PINE_ID = 350
 ROCK_CLIFF_ID = 623
 RELIC_ID = 285
 MAP_REVEALER_ID = 837
+FLARE_UNIT_ID = 112                # Natywny obiekt Flary (wywołuje ping i dźwięk na minimapie)
+TORCH_ID = 499                     # Pochodnia oznaczająca strefę Aury Magów
 
-# Unikalne budynki zastępujące Cudy (brak licznika 350 lat!) i startowe umocnienia przełęczy
-FEITORIA_ID = 1021                 # Serce Twierdzy Sojuszu (zamiast Wonder P3)
-KREPOST_ID = 1251                  # Skarbiec w Queście 3 (zamiast Wonder P8)
-FORTIFIED_PALISADE_ID = 119        # Wzmocniona Palisada (Fortified Palisade Wall = 119)
-PALISADE_GATE_SW_NE_ID = 789       # Zbudowana Brama Palisadowa wzdłuż osi X (Ascending Closed)
-PALISADE_GATE_NW_SE_ID = 793       # Zbudowana Brama Palisadowa wzdłuż osi Y (Descending Closed)
+# Budynki specjalne i umocnienia przełęczy
+FEITORIA_ID = 1021                 # Serce Twierdzy Sojuszu (należy do Gracza 2)
+KREPOST_ID = 1251                  # Skarbiec w Queście 3
+FORTIFIED_PALISADE_ID = 119        # Wzmocniona Palisada (Fortified Palisade Wall)
+PALISADE_GATE_SW_NE_ID = 789       # Zbudowana Brama Palisadowa wzdłuż osi X
+PALISADE_GATE_NW_SE_ID = 793       # Zbudowana Brama Palisadowa wzdłuż osi Y
 
 # 6 klas zmodyfikowanych jednostek Hordy
-IMAM_UNIT_ID = 842                 # Arcymag Tarczy (P7)
-SIEGE_ONAGER_ID = 588              # Kolos Oblężniczy / Moździerz 22 zasięgu (P6)
+IMAM_UNIT_ID = 842                 # Arcymag Tarczy (P7) - 240 HP, regen 5 HP/s, +30 pancerza i leczenie dla P5-P8
+SIEGE_ONAGER_ID = 588              # Moździerz Oblężniczy (P6) - 21 zasięgu, martwa strefa 6 kratek
 PETARD_ID = 440                    # Fanatyk Kamikaze (P5)
 FLAMING_CAMEL_ID = 1263            # Płonący Wielbłąd Kamikaze (P5)
 ELITE_BERSERK_ID = 694             # Szybki Berserker Szturmowy (P5)
-ELITE_BATTLE_ELEPHANT_ID = 1134    # Tytan Hordy 1400 HP (P8)
+ELITE_BATTLE_ELEPHANT_ID = 1134    # Taran-Żółw / Żelazny Słoń (P8) - 1450 HP, 3 dmg w wojsko, +220 w budynki
+HUSSAR_ID = 441                    # Szakal Dywersyjny (P7) - 2 dmg, wjeżdża w wieśniaków pod TC
 
 TERRAIN_WATER = 1
 TERRAIN_SHALLOWS = 4
@@ -39,21 +42,28 @@ RES_FOOD = 0
 RES_WOOD = 1
 RES_STONE = 2
 RES_GOLD = 3
+RES_BONUS_POP_CAP = 32
 
 # Oficjalne ID atrybutów obiektów silnika Genie (AoE2: DE)
 ATTR_HIT_POINTS = 0
 ATTR_LINE_OF_SIGHT = 1
+ATTR_UNIT_SIZE_X = 3
+ATTR_UNIT_SIZE_Y = 4
 ATTR_MOVEMENT_SPEED = 5
 ATTR_ARMOR = 8
 ATTR_ATTACK = 9
 ATTR_ATTACK_RELOAD_TIME = 10
 ATTR_MAXIMUM_RANGE = 12
 ATTR_WORK_RATE = 13
+ATTR_MINIMUM_RANGE = 20
 ATTR_BLAST_WIDTH = 22
 ATTR_SEARCH_RADIUS = 23
+ATTR_HERO_STATUS = 40              # 1 = Poświata Bohatera (Hero Glow) + odporność na konwersję
+ATTR_REGENERATION_RATE = 109       # Regeneracja HP na minutę (300 = 5 HP/s)
 
 # Technologie
 TECH_CARTOGRAPHY = 19
+TECH_FAITH = 45
 TECH_FEUDAL_AGE = 101
 TECH_CASTLE_AGE = 102
 TECH_IMPERIAL_AGE = 103
@@ -123,15 +133,24 @@ def set_as_objective(trigger, text: str, order: int, is_header: bool = False):
 
 
 def send_highlight_chat(trigger, color_tag: str, message: str, flare_x: int | None = None, flare_y: int | None = None):
+    """Wysyła kolorowy komunikat oraz gwarantowaną Flarę (zarówno efektem flare, jak i obiektem 112)."""
     for h_p in [PlayerId.ONE, PlayerId.TWO, PlayerId.THREE, PlayerId.FOUR]:
         safe_call(
             trigger.new_effect.send_chat,
             source_player=h_p,
             message=f"{color_tag}{message}",
         )
-        if flare_x is not None and flare_y is not None and hasattr(trigger.new_effect, "flare"):
+        if flare_x is not None and flare_y is not None:
+            if hasattr(trigger.new_effect, "flare"):
+                safe_call(
+                    trigger.new_effect.flare,
+                    source_player=h_p,
+                    location_x=flare_x,
+                    location_y=flare_y,
+                )
             safe_call(
-                trigger.new_effect.flare,
+                trigger.new_effect.create_object,
+                object_list_unit_id=FLARE_UNIT_ID,
                 source_player=h_p,
                 location_x=flare_x,
                 location_y=flare_y,
@@ -139,43 +158,40 @@ def send_highlight_chat(trigger, color_tag: str, message: str, flare_x: int | No
 
 
 def populate_ingame_scenario_descriptions(scenario):
-    """Wpisuje opis scenariusza, bestiariusz i nagrody bezpośrednio do zakładek menu w grze."""
     mm_msg = getattr(scenario, "message_manager", None)
     if mm_msg is None:
         return
 
     instructions_text = (
-        "KRONIKI RUBIEZY: HORDA I EKSPEDYCJE (4P Co-op)\n\n"
-        "ZASADY ROZGRYWKI:\n"
-        "- Broncie 3 Przeleczy Twierdzy Sojuszu oraz Cytadeli Sojuszu (Feitorii w centrum).\n"
-        "- Pierwsza fala uderza w 10:00, a kolejne co 3 minuty (po kazdej fali macie ~2,5 minuty Okna Ekspedycyjnego).\n"
-        "- Etapy fal: do 15 min glownie Feudal, 16-25 min Castle Age (stopniowo dochodza specjalisci), po 25 min Imperial Age.\n"
-        "- Od 14:00 co 4 minuty jednostki Hordy otrzymuja bonus +25 HP i +2 Ataku.\n"
-        "- Zburzenie wszystkich 6 Settlementow Hordy konczy gre zwyciestwem!\n\n"
-        "4 QUESTY POBOCZNE (Zburz budynek wroga, aby odebrac nagrode dla calej druzyny):\n"
-        "- Q1 Karawanseraj (Poludnie - Targowisko): +500 Zlota, 3 Wozy Handlowe i bezpieczne Targowiska.\n"
-        "- Q2 Klif Artylerii (Polnocny-Zachod - Uniwersytet): Darmowa Balistyka, Chemia, Siege Engineers oraz +4 Ataku i +12% szybkosci jazdy/strzelcow.\n"
-        "- Q3 Skarbiec Krasnoludow (Wschod - Krepost za murami): +400 surowcow od reki ORAZ staly dochod +120 Zywnosci, +120 Drewna i +100 Zlota co minute.\n"
-        "- Q4 Krwawy Oltarz (Polnoc - Klasztor): +50 Max HP dla Waszych jednostek i oslabienie Magow o 80%.\n"
+        "KRONIKI RUBIEZY: HORDA I EKSPEDYCJE (v5.2 - 4P Co-op)\n\n"
+        "ZASADY ROZGRYWKI (Horyzont 60-90 minut):\n"
+        "- Broncie 3 Przeleczy Twierdzy Sojuszu oraz Cytadeli Sojuszu (Feitorii P2 w centrum).\n"
+        "- Fala 1 uderza w 8:30 (bez taranow i bez jednostek specjalnych), Fala 2 w 13:00 (z taranem/mangonelem, bez jednostek specjalnych), Fala 3 w 18:00, a kolejne co 5,5 minuty.\n"
+        "- Od 20:00 co 5 minut jednostki Hordy otrzymuja +5 HP i +1 Ataku (w 45:00 i 55:00 wchodza wyzsze biegi skalowania Late-Game).\n"
+        "- Wasi Mnisi dzialaja w 100% normalnie (lecza i konwertuja). Mnisi wroga nie konwertuja, ale Arcymagowie lecza pobliska Horde.\n\n"
+        "4 QUESTY POBOCZNE (STALE PERKI CYWILIZACYJNE DLA WSZYSTKICH 4 GRACZY):\n"
+        "- Q1 Karawanseraj (Poludnie - Targowisko): Automatycznie buduje KAMIENNY MUR OBRONNY z Basztami wzdluz dolnej krawedzi mapy (tworzac bezpieczny korytarz handlowy 180 kratek!), daje +30 Popu, +20% szybszych Wiesniakow i 4 Wozy Handlowe.\n"
+        "- Q2 Klif Artylerii (Polnocny-Zachod - Uniwersytet): Darmowa Balistyka, Chemia, Siege Engineers, +2 Zasiegu i +4 Ataku dla strzelcow oraz +12% szybkosci i +4 Ataku dla jazdy.\n"
+        "- Q3 Skarbiec Krasnoludow (Wschod - Krepost za murami): +20 Popu ORAZ duzy dochod +250 Zywnosci, +250 Drewna, +200 Zlota i +40 Kamienia co minute!\n"
+        "- Q4 Krwawy Oltarz (Polnoc - Klasztor): +30% Max HP i +2/+2 Pancerza dla armii, +40% szybsza produkcja wojska oraz oslabienie Arcymagow.\n"
     )
 
     hints_text = (
-        "BESTIARIUSZ HORDY (6 ZMODYFIKOWANYCH JEDNOSTEK - WCHODZA STOPNIOWO):\n"
-        "1. Berserkerzy Szturmowi (P5 - od Fali 2): Szybka piechota (320 HP, duzy atak wrecz, 0 pancerza na strzaly).\n"
-        "2. Snajperzy (Janczarzy P6 - od Fali 2): 20 zasiegu, +110 ataku, 140 HP.\n"
-        "3. Kamikaze (Petardy i Plonace Wielblady P5 - od Fali 3): Bardzo szybkie (1.65x), 220 HP, wybuchaja w murach i oddzialach.\n"
-        "4. Arcymagowie Tarczy (Imamowie P7 - od Fali 4): W promieniu 25 kratek przed Brama Centralna daja wojskom P7 +60 Pancerza i regeneracje. Zabij Maga, aby zdjac tarcze!\n"
-        "5. Kolosy Obleznicze (Onagery P6 - od Fali 5): 22 zasiegu, 850 HP, ogromny wybuch, ale strzelaja co 10s. Unikaj salw i dobijaj jazda!\n"
-        "6. Tytani Hordy (Slonie Bojowe P8 - od Fali 6): 1400 HP i tratowanie obszarowe (kontruj halabardami i mnichami).\n"
+        "BESTIARIUSZ HORDY (WYSPECJALIZOWANE JEDNOSTKI Z POSWIATA BOHATERA):\n"
+        "1. Taran-Zolw / Zelazny Slon (Slon Bojowy P8 - Tank): 1450 HP, +10/+12 pancerza, odporny na konwersje. Zadaje tylko 3 dmg jednostkom, ale +220 dmg budynkom! Zignoruj go w walce z armia, a potem dobij Halabardami.\n"
+        "2. Szakale Dywersyjne (Huzarzy P7 - Eco-Raiders): Szybkosc 1.62, +6 pancerza na strzaly, tylko 2 ataku. Wjezdzaja prosto pod Wasze Town Center atakowac chlopow!\n"
+        "3. Arcymag Tarczy (Imam P7 - Globalny Support): W promieniu 25 kratek przed Brama Centralna daje +30/+30 Pancerza i leczy (+15 HP/3s) WSZYSTKIE frakcje Hordy (P5-P8)! Ma 240 HP, 3/4 pancerza i regeneracje 5 HP/s - musisz skupic na nim ogien, aby go dobic!\n"
+        "4. Mozdzierz Oblezniczy (Onager P6): 350 HP, 21 zasiegu, ogromny wybuch. WADA: strzal co 10s i MARTWA STREFA 6 kratek (bezbronny w zwarciu!).\n"
+        "5. Snajperzy (Janczarzy P6): 90 HP, 19 zasiegu, ~107 dmg w 1 cel. WADA: strzal co 6.5s.\n"
+        "6. Berserkerzy i Kamikaze (P5): Szybkie jednostki szturmowe o zerowym pancerzu na strzaly.\n"
     )
 
     scouts_text = (
         "RAPORT ZWIADOWCZY - 6 SETTLEMENTOW HORDY:\n"
-        "- Grade 1 Polnoc (76, 72) i Wschod (132, 152): Bliskie obozy. Zburzenie Wiezy usuwa z fal Berserkerow i jednostki Kamikaze.\n"
-        "- Grade 2 Akademia Artylerii P6 (68, 34): Zburzenie Zamku trwale usuwa z gry Snajperow i Kolosy Obleznicze!\n"
-        "- Grade 2 Klasztor Arcymagow P7 (148, 72): Zburzenie Zamku trwale usuwa z gry Magow Niesmiertelnosci i Szamanow!\n"
-        "- Grade 3 Cytadele Hordy P8 (142, 24) oraz (176, 56): Glowne bazy Tytanow Sloniowych.\n"
-        "UWAGA: Zburzenie kazdego Settlementu daje +500 Zlota i Zywnosci, ale pozostale obozy wpadaja w Furie (+30 HP, +2 Ataku i fala odwetowa)!"
+        "- Grade 1 Polnoc (76, 72) i Wschod (132, 152): Bliskie obozy. Zburzenie Wiezy usuwa z fal Berserkerow i Kamikaze.\n"
+        "- Grade 2 Akademia Artylerii P6 (68, 34): Zburzenie Zamku trwale usuwa z gry Snajperow i Mozdzierze Obleznicze!\n"
+        "- Grade 2 Klasztor Arcymagow P7 (148, 72): Zburzenie Zamku trwale usuwa z gry Arcymagow Tarczy i Szakale Dywersyjne!\n"
+        "- Grade 3 Cytadele Hordy P8 (142, 24) oraz (176, 56): Glowne bazy Zelaznych Sloni-Tankow.\n"
     )
 
     if hasattr(mm_msg, "instructions"):
@@ -207,41 +223,74 @@ OUTPUT_SCENARIO = SCENARIO_FOLDER / "Kroniki_Rubiezy_Horda_Coop.aoe2scenario"
 MAP_SIZE = 200
 
 BALANCE = {
-    "first_wave_sec": 600,           # 10:00 - Pierwsza fala
-    "wave_interval_sec": 180,        # Co 3 minuty kolejna fala
-    "escalation_interval_sec": 240,  # Co 4 minuty OD pierwszego ataku (14:00, 18:00...)
+    # Rytm fal: 8:30 (bez taranów), 13:00 (z taranem/mangonelem, bez mutantów), 18:00 (pierwsi specjaliści), potem co 5,5 minuty (330s)
+    "wave1_sec": 510,                     # 8:30
+    "wave2_sec": 780,                     # 13:00
+    "wave3_sec": 1080,                    # 18:00
+    "wave_interval_sec": 330,             # Co 5,5 minuty (330s)
 
-    "sniper_range": 20,
-    "sniper_bonus_atk": 110,
-    "sniper_reload": 6.0,
-    "sniper_hp": 140,
+    # Trzystopniowe skalowanie czasowe (utrzymuje wyzwanie w Late Game przy 250 popu i perkach z Questów!)
+    "escalation_start_sec": 1200,         # Od 20:00 (Bieg 1): +5 HP i +1 Ataku co 5 minut
+    "escalation_interval_sec": 300,
+    "escalation_hp_add": 5,
+    "escalation_atk_add": 1,
+    "late_escalation_start_sec": 2700,    # Od 45:00 (Bieg 2): dodatkowe +9 HP i +1 Ataku co 5 minut
+    "late_escalation_hp_add": 9,
+    "endgame_escalation_start_sec": 3300, # Od 55:00 (Bieg 3): dodatkowe +10 HP i +2 Ataku co 5 minut
+    "endgame_escalation_hp_add": 10,
 
-    "colossus_hp": 850,
-    "colossus_range": 22,
-    "colossus_reload": 10.0,
-    "colossus_blast_width": 2.8,
-    "colossus_bonus_atk": 90,
-    "colossus_speed": 0.40,
+    # 1. Taran-Żółw / Żelazny Słoń (Tank P8: 1450 HP, +10/+12 pancerza, Hero Glow, 3 dmg w jednostki, +220 w budynki)
+    "tank_hp": 1450,
+    "tank_unit_atk": 3,
+    "tank_bldg_bonus": 220,
+    "tank_melee_armor": 10,
+    "tank_pierce_armor": 12,
+    "tank_speed": 0.52,
 
-    "kamikaze_hp": 220,
-    "kamikaze_speed_mult": 1.65,
-    "kamikaze_blast_width": 2.5,
-    "kamikaze_bonus_atk": 120,
+    # 2. Szakal Dywersyjny (Eco-Raider Huzar P7: prędkość 1.62, +6 pancerza na strzały, tylko 2 ataku)
+    "raider_hp": 95,
+    "raider_speed": 1.62,
+    "raider_atk": 2,
+    "raider_pierce_armor": 6,
 
-    "berserk_hp": 320,
-    "berserk_speed": 1.45,
-    "berserk_bonus_atk": 18,
-
-    "titan_hp": 1400,
-    "titan_bonus_atk": 25,
-    "titan_blast_width": 1.5,
-
-    "mage_hp": 550,
+    # 3. Arcymag Tarczy (Imam P7: 240 HP, 3/4 pancerza, regeneracja 5 HP/s = 300 HP/min, +30 pancerza i leczenie dla P5-P8)
+    "mage_hp": 240,
+    "mage_melee_armor": 3,
+    "mage_pierce_armor": 4,
+    "mage_regen_per_min": 300,            # 300 HP/min = 5 HP/s
     "mage_local_radius": 25,
-    "mage_shield_armor": 60,
-    "mage_local_heal_2s": 100,
+    "mage_shield_armor": 30,
+    "mage_aoe_heal_3s": 15,               # Leczy pobliskie jednostki Hordy o +15 HP co 3s (bez konwersji!)
+    "mage_speed": 0.78,
 
-    "quest3_trickle": {"food": 120, "wood": 120, "gold": 100},
+    # 4. Moździerz Oblężniczy (Siege Onager P6: 350 HP, 21 zasięgu, martwa strefa 6 kratek, przeładowanie 10s)
+    "mortar_hp": 350,
+    "mortar_range": 21,
+    "mortar_min_range": 6,
+    "mortar_reload": 10.0,
+    "mortar_blast_width": 2.6,
+    "mortar_bonus_atk": 75,
+    "mortar_speed": 0.42,
+
+    # 5. Snajper Imperialny (Elitarny Janczar P6: 90 HP, 19 zasięgu, +85 ataku, przeładowanie 6.5s)
+    "sniper_hp": 90,
+    "sniper_range": 19,
+    "sniper_bonus_atk": 85,
+    "sniper_reload": 6.5,
+
+    # 6. Berserkerzy i Kamikaze (P5: szybkie jednostki przełamania o 0 pancerzu na strzały)
+    "berserk_hp": 185,
+    "berserk_speed": 1.40,
+    "berserk_bonus_atk": 12,
+    "kamikaze_hp": 115,
+    "kamikaze_speed": 1.50,
+    "kamikaze_blast_width": 2.4,
+    "kamikaze_bonus_atk": 95,
+
+    # Stałe nagrody za Questy
+    "q1_bonus_pop": 30,
+    "q3_bonus_pop": 20,
+    "quest3_trickle": {"food": 250, "wood": 250, "gold": 200, "stone": 40},
     "human_start_res": {"food": 500, "wood": 600, "gold": 400, "stone": 300},
 }
 
@@ -262,7 +311,6 @@ class SafeMapGrid:
                 self.no_tree_zones.add((x, y))
 
     def mark_no_trees_box(self, x1: int, y1: int, x2: int, y2: int):
-        """Blokuje sadzenie drzew wyłącznie w dokładnym prostokącie (np. w świetle przełęczy)."""
         for x in range(max(0, min(x1, x2)), min(self.size, max(x1, x2) + 1)):
             for y in range(max(0, min(y1, y2)), min(self.size, max(y1, y2) + 1)):
                 self.no_tree_zones.add((x, y))
@@ -307,7 +355,6 @@ class SafeMapGrid:
         return None
 
     def place_gate(self, um, player: PlayerId, gate_id: int, cx: int, cy: int, along_x: bool):
-        """Stawia 4-kratkową Bramę Palisadową (789 lub 793) na środku przełęczy."""
         if along_x:
             for x in range(cx - 2, cx + 2):
                 self.occupied_tiles.add((x, cy))
@@ -364,10 +411,13 @@ def research_techs(trigger, players: list[PlayerId], tech_ids: list[int]):
             )
 
 
-def reveal_building_pinpoint(um, cx: int, cy: int):
-    rx = max(2, min(MAP_SIZE - 3, cx + 9))
-    ry = max(2, min(MAP_SIZE - 3, cy))
-    um.add_unit(player=PlayerId.ONE, unit_const=MAP_REVEALER_ID, x=rx + 0.5, y=ry + 0.5)
+def reveal_building_center_permanent(um, cx: int, cy: int):
+    """
+    Stawia STAŁY Map Revealer dokładnie na środku budynku zadania `(cx, cy)` dla Gracza 1
+    (dzięki Kartografii widzą go wszyscy 4 gracze). Przy minimalnym Line of Sight = 4 odkrywa
+    wyłącznie sam budynek zadania (można go zawsze kliknąć!), nie odkrywając reszty mapy!
+    """
+    um.add_unit(player=PlayerId.ONE, unit_const=MAP_REVEALER_ID, x=cx + 0.5, y=cy + 0.5)
 
 
 def paint_natural_biome_background(mm, size: int):
@@ -456,9 +506,8 @@ def populate_forest_trees(mm, um, grid: SafeMapGrid):
 
 def build_fortified_pass_defenses(um, grid: SafeMapGrid, owner: PlayerId, gx: int, gy: int, along_x: bool):
     """
-    Buduje na przełęczy Wzmocnioną Palisadę (ID 119) z Bramą Palisadową (ID 789 / 793) na środku.
-    Palisada biegnie przez całą szerokość przełęczy (-6..+6) i wchodzi bezpośrednio w ścianę lasu (-7/+7),
-    dzięki czemu między murem a lasem nie ma żadnej luki!
+    Buduje na przełęczy pełną Wzmocnioną Palisadę (ID 119) z Bramą Palisadową (789/793) na środku
+    (bez klifów zwężających przejście!).
     """
     if along_x:
         grid.place_gate(um, owner, PALISADE_GATE_SW_NE_ID, gx, gy, along_x=True)
@@ -516,10 +565,12 @@ def spawn_symmetrical_player_base(um, mm, grid: SafeMapGrid, player: PlayerId, c
 
 
 def spawn_settlement_buildings(um, grid: SafeMapGrid, player: PlayerId, cx: int, cy: int, grade: int):
-    reveal_building_pinpoint(um, cx, cy)
+    reveal_building_center_permanent(um, cx, cy)
     if grade == 1:
         grid.mark_no_trees(cx, cy, radius=11)
         core = grid.place_building(um, player, BuildingInfo.GUARD_TOWER.ID, cx, cy, size_tiles=2, no_tree_margin=2)
+        grid.place_building(um, player, BuildingInfo.GUARD_TOWER.ID, cx - 5, cy + 4, size_tiles=2, no_tree_margin=1)
+        grid.place_building(um, player, BuildingInfo.GUARD_TOWER.ID, cx + 5, cy + 4, size_tiles=2, no_tree_margin=1)
         grid.place_building(um, player, BuildingInfo.BARRACKS.ID, cx - 6, cy - 4, size_tiles=3, no_tree_margin=2)
         grid.place_building(um, player, BuildingInfo.SIEGE_WORKSHOP.ID, cx + 6, cy - 4, size_tiles=3, no_tree_margin=2)
         return core
@@ -544,29 +595,61 @@ def spawn_settlement_buildings(um, grid: SafeMapGrid, player: PlayerId, cx: int,
     return core
 
 
-def add_proximity_garrison_trigger(tm, enable_parent_trigger, name: str, ai_player: PlayerId, cx: int, cy: int,
-                                   units_spec: list[tuple[int, int]]):
-    detect_radius = 7
+def add_guarded_camp_with_leash(tm, enable_parent_trigger, name: str, ai_player: PlayerId, cx: int, cy: int,
+                                units_spec: list[tuple[int, int]]):
+    """
+    Spawnuje silny garnizon na smyczy terytorialnej przy wejściu nawet 1 jednostki gracza w promień 15 kratek:
+    - Gracz 1 posiada na środku `(cx, cy)` dokładnie 1 stały Map Revealer, więc dla P1 warunkiem jest `quantity=2`
+      (1 Revealer + 1 dowolna jednostka P1).
+    - Gracze 2, 3 i 4 nie mają tam Revealera, więc dla nich warunkiem jest `quantity=1` (1 dowolna jednostka).
+    Dzięki temu Map Revealer zostaje na budynku przez całą grę, a każdy skaut od razu wyzwala obrońców!
+    """
+    detect_radius = 15
     x1, y1 = max(0, cx - detect_radius), max(0, cy - detect_radius)
     x2, y2 = min(MAP_SIZE - 1, cx + detect_radius), min(MAP_SIZE - 1, cy + detect_radius)
 
     t_spawn = tm.add_trigger(f"Garrison_Spawn_{name}", enabled=False, looping=False)
-    add_spawn_and_attack_effect(t_spawn, ai_player, units_spec, spawn_x=cx, spawn_y=cy + 4, target_x=cx, target_y=cy)
+    add_spawn_and_attack_effect(t_spawn, ai_player, units_spec, spawn_x=cx, spawn_y=cy + 3, target_x=cx, target_y=cy)
+
+    t_leash = tm.add_trigger(f"Garrison_Leash_{name}", enabled=False, looping=True)
+    safe_call(t_leash.new_condition.timer, timer=3)
+    ring_inner = 9
+    ring_outer = 20
+    leash_strips = [
+        (cx - ring_outer, cy - ring_outer, cx + ring_outer, cy - ring_inner),
+        (cx - ring_outer, cy + ring_inner, cx + ring_outer, cy + ring_outer),
+        (cx - ring_outer, cy - ring_inner, cx - ring_inner, cy + ring_inner),
+        (cx + ring_inner, cy - ring_inner, cx + ring_outer, cy + ring_inner),
+    ]
+    for sx1, sy1, sx2, sy2 in leash_strips:
+        safe_call(
+            t_leash.new_effect.attack_move,
+            source_player=ai_player,
+            area_x1=max(0, sx1),
+            area_y1=max(0, sy1),
+            area_x2=min(MAP_SIZE - 1, sx2),
+            area_y2=min(MAP_SIZE - 1, sy2),
+            location_x=cx,
+            location_y=cy,
+        )
+    safe_call(t_spawn.new_effect.activate_trigger, trigger_id=t_leash.trigger_id)
 
     for h_p in [PlayerId.ONE, PlayerId.TWO, PlayerId.THREE, PlayerId.FOUR]:
+        req_qty = 2 if h_p == PlayerId.ONE else 1
         t_detect = tm.add_trigger(f"Garrison_Detect_{name}_P{h_p.value}", enabled=False, looping=False)
         safe_call(
             t_detect.new_condition.objects_in_area,
             source_player=h_p,
             area_x1=x1, area_y1=y1, area_x2=x2, area_y2=y2,
-            quantity=5,
+            quantity=req_qty,
         )
         safe_call(t_detect.new_effect.activate_trigger, trigger_id=t_spawn.trigger_id)
         safe_call(enable_parent_trigger.new_effect.activate_trigger, trigger_id=t_detect.trigger_id)
 
 
 def add_spawn_and_attack_effect(trigger, ai_player: PlayerId, units_spec: list[tuple[int, int]],
-                                spawn_x: int, spawn_y: int, target_x: int, target_y: int):
+                                spawn_x: int, spawn_y: int, target_x: int, target_y: int,
+                                ignore_frontline_move_only: bool = False):
     idx = 0
     for unit_id, count in units_spec:
         for _ in range(count):
@@ -581,8 +664,12 @@ def add_spawn_and_attack_effect(trigger, ai_player: PlayerId, units_spec: list[t
             )
             idx += 1
 
+    order_fn = trigger.new_effect.attack_move
+    if ignore_frontline_move_only and hasattr(trigger.new_effect, "move"):
+        order_fn = trigger.new_effect.move
+
     safe_call(
-        trigger.new_effect.attack_move,
+        order_fn,
         source_player=ai_player,
         area_x1=max(0, spawn_x - 8),
         area_y1=max(0, spawn_y - 8),
@@ -626,10 +713,10 @@ def build_horde_scenario():
 
     paint_natural_biome_background(mm, MAP_SIZE)
 
-    # Pasmo górsko-leśne Twierdzy Sojuszu dochodzące do samych krawędzi mapy (0 oraz 199)
+    # Pasmo górsko-leśne Twierdzy Sojuszu
     for x in range(0, 106, 8):
         grid.add_hill_plateau(x, 100, flat_radius=4, height=3)
-    for y in range(100, 200, 8):
+    for y in range(100, 186, 8):
         grid.add_hill_plateau(104, y, flat_radius=4, height=3)
 
     set_box_terrain(mm, 0, 95, 108, 105, TerrainId.FOREST_PINE)
@@ -638,15 +725,22 @@ def build_horde_scenario():
     gate_north = (48, 100)
     gate_center = (104, 114)
     gate_east = (104, 162)
+    gate_trade = (104, 193)  # Południowa Brama Handlowa otwierająca się na Korytarz Q1
 
-    # Wycięcie przełęczy o dokładnej szerokości od -6 do +6 (drzewa rosną od razu na -7 i +7, zero luki przy palisadzie!)
-    for gx, gy in [gate_north, gate_center, gate_east]:
+    for gx, gy in [gate_north, gate_center, gate_east, gate_trade]:
         for x in range(gx - 6, gx + 7):
             for y in range(gy - 6, gy + 7):
                 if 0 <= x < MAP_SIZE and 0 <= y < MAP_SIZE:
                     grid.elev[x][y] = 0
         set_box_terrain(mm, gx - 6, gy - 6, gx + 6, gy + 6, TerrainId.DIRT_1)
         grid.mark_no_trees_box(gx - 6, gy - 6, gx + 6, gy + 6)
+
+    # Przygotowanie Korytarza Handlowego wzdłuż dolnej krawędzi mapy (x: 104..199, y: 183..199) pod Quest 1
+    for x in range(104, MAP_SIZE):
+        for y in range(182, MAP_SIZE):
+            grid.elev[x][y] = 0
+    grid.mark_no_trees_box(104, 182, MAP_SIZE - 1, MAP_SIZE - 1)
+    set_road(mm, grid, 16, 193, 195, 193, width=1)
 
     # Rzeka w otwartym polu z 3 szerokimi brodami
     for t_step in range(140):
@@ -674,7 +768,7 @@ def build_horde_scenario():
     grid.add_hill_plateau(*s_coords["G3_North"], flat_radius=17, height=4)
     grid.add_hill_plateau(*s_coords["G3_East"], flat_radius=17, height=4)
 
-    q1_pos = (154, 182)
+    q1_pos = (154, 190)
     q2_pos = (28, 32)
     q3_pos = (142, 118)
     q4_pos = (105, 20)
@@ -702,17 +796,26 @@ def build_horde_scenario():
     for h_p in human_players:
         spawn_symmetrical_player_base(um, mm, grid, h_p, *p_coords[h_p])
 
-    # Wzmocniona Palisada (ID 119) + Brama Palisadowa (789/793) łącząca się bezpośrednio z lasem
+    # Pełne Wzmocnione Palisady z Bramą na całej szerokości przełęczy (bez klifów!)
     build_fortified_pass_defenses(um, grid, PlayerId.THREE, *gate_north, along_x=True)
     build_fortified_pass_defenses(um, grid, PlayerId.ONE, *gate_center, along_x=False)
     build_fortified_pass_defenses(um, grid, PlayerId.FOUR, *gate_east, along_x=False)
+    build_fortified_pass_defenses(um, grid, PlayerId.FOUR, *gate_trade, along_x=False)
 
+    # Wizualny krąg Pochodni (TORCH_ID = 499) przed Bramą Centralną pokazujący zasięg Aury Maga
+    for angle_deg in range(0, 360, 45):
+        rad = math.radians(angle_deg)
+        tx = round(116 + 10 * math.cos(rad))
+        ty = round(114 + 10 * math.sin(rad))
+        grid.place_unit(um, PlayerId.GAIA, TORCH_ID, tx, ty, no_tree_margin=1)
+
+    # Feitoria na start należy do Gracza 2 (PlayerId.TWO)
     fortress_heart_pos = (54, 146)
     allied_citadel = grid.place_building(
-        um, PlayerId.THREE, FEITORIA_ID, fortress_heart_pos[0], fortress_heart_pos[1], size_tiles=5, no_tree_margin=3
+        um, PlayerId.TWO, FEITORIA_ID, fortress_heart_pos[0], fortress_heart_pos[1], size_tiles=5, no_tree_margin=3
     )
 
-    # 3. Stawianie 6 Settlementów
+    # 3. Stawianie 6 Settlementów (ze stałym Map Revealerem o minimalnym LOS=4 na samym środku!)
     s_g1_north = spawn_settlement_buildings(um, grid, PlayerId.FIVE, *s_coords["G1_North"], grade=1)
     s_g1_east  = spawn_settlement_buildings(um, grid, PlayerId.FIVE, *s_coords["G1_East"], grade=1)
     s_g2_snipers = spawn_settlement_buildings(um, grid, PlayerId.SIX, *s_coords["G2_Snipers"], grade=2)
@@ -723,18 +826,22 @@ def build_horde_scenario():
     for sx, sy in [(48, 86), (118, 114), (120, 162), (76, 84), (120, 152), (68, 48), (134, 78), (128, 36), (160, 62)]:
         grid.mark_no_trees(sx, sy, radius=7)
 
-    # 4. Stawianie 4 Questów
-    reveal_building_pinpoint(um, *q1_pos)
+    # 4. Stawianie 4 Questów (ze stałym Map Revealerem o minimalnym LOS=4 na samym środku!)
+    reveal_building_center_permanent(um, *q1_pos)
     grid.mark_no_trees(*q1_pos, radius=9)
-    set_circle_terrain(mm, *q1_pos, radius=8, terrain_id=TerrainId.DIRT_1)
+    set_circle_terrain(mm, *q1_pos, radius=7, terrain_id=TerrainId.DIRT_1)
     q1_bldg = grid.place_building(um, PlayerId.FIVE, BuildingInfo.MARKET.ID, q1_pos[0], q1_pos[1], size_tiles=4, no_tree_margin=2)
+    grid.place_building(um, PlayerId.FIVE, BuildingInfo.GUARD_TOWER.ID, q1_pos[0] - 5, q1_pos[1] - 3, size_tiles=2, no_tree_margin=1)
+    grid.place_building(um, PlayerId.FIVE, BuildingInfo.GUARD_TOWER.ID, q1_pos[0] + 5, q1_pos[1] - 3, size_tiles=2, no_tree_margin=1)
 
-    reveal_building_pinpoint(um, *q2_pos)
+    reveal_building_center_permanent(um, *q2_pos)
     grid.mark_no_trees(*q2_pos, radius=11)
     set_circle_terrain(mm, *q2_pos, radius=10, terrain_id=TerrainId.DIRT_2)
     q2_bldg = grid.place_building(um, PlayerId.SIX, BuildingInfo.UNIVERSITY.ID, q2_pos[0], q2_pos[1], size_tiles=4, no_tree_margin=2)
+    grid.place_building(um, PlayerId.SIX, BuildingInfo.KEEP.ID, q2_pos[0] - 5, q2_pos[1] + 5, size_tiles=2, no_tree_margin=1)
+    grid.place_building(um, PlayerId.SIX, BuildingInfo.KEEP.ID, q2_pos[0] + 5, q2_pos[1] + 5, size_tiles=2, no_tree_margin=1)
 
-    reveal_building_pinpoint(um, *q3_pos)
+    reveal_building_center_permanent(um, *q3_pos)
     grid.mark_no_trees(*q3_pos, radius=11)
     set_circle_terrain(mm, *q3_pos, radius=10, terrain_id=TerrainId.ROAD)
     q3_bldg = grid.place_building(um, PlayerId.EIGHT, KREPOST_ID, q3_pos[0], q3_pos[1], size_tiles=4, no_tree_margin=2)
@@ -744,22 +851,24 @@ def build_horde_scenario():
         grid.place_wall_tile(um, PlayerId.EIGHT, BuildingInfo.FORTIFIED_WALL.ID, q3_pos[0] + wx, q3_pos[1] - 8)
         grid.place_wall_tile(um, PlayerId.EIGHT, BuildingInfo.FORTIFIED_WALL.ID, q3_pos[0] + wx, q3_pos[1] + 8)
 
-    reveal_building_pinpoint(um, *q4_pos)
+    reveal_building_center_permanent(um, *q4_pos)
     grid.mark_no_trees(*q4_pos, radius=10)
     set_circle_terrain(mm, *q4_pos, radius=9, terrain_id=TerrainId.DIRT_3)
     q4_bldg = grid.place_building(um, PlayerId.SEVEN, BuildingInfo.MONASTERY.ID, q4_pos[0], q4_pos[1], size_tiles=3, no_tree_margin=2)
+    grid.place_building(um, PlayerId.SEVEN, BuildingInfo.KEEP.ID, q4_pos[0] - 5, q4_pos[1] + 4, size_tiles=2, no_tree_margin=1)
+    grid.place_building(um, PlayerId.SEVEN, BuildingInfo.KEEP.ID, q4_pos[0] + 5, q4_pos[1] + 4, size_tiles=2, no_tree_margin=1)
 
     for rx, ry in [(54, 62), (116, 88), (168, 128), (92, 44)]:
         grid.place_unit(um, PlayerId.GAIA, RELIC_ID, rx, ry, no_tree_margin=2)
         spawn_resource_cluster(um, grid, rx + 3, ry + 3, OtherInfo.GOLD_MINE.ID, count=6)
 
-    # Puszcza Zaplecza dochodząca do samych krawędzi mapy
-    set_box_terrain(mm, 0, 106, 12, 199, TerrainId.FOREST_OAK)
-    set_box_terrain(mm, 12, 188, 98, 199, TerrainId.FOREST_PINE)
+    # Puszcza Zaplecza (z zachowaniem przejezdnego traktatu handlowego na y = 191..196)
+    set_box_terrain(mm, 0, 106, 12, 189, TerrainId.FOREST_OAK)
+    set_box_terrain(mm, 12, 182, 98, 189, TerrainId.FOREST_PINE)
 
     for fx, fy, r, t_id, seed in [
         (54, 122, 5.5, TerrainId.FOREST_OAK, 0.5),
-        (54, 172, 6.0, TerrainId.FOREST_PINE, 1.3),
+        (54, 172, 5.0, TerrainId.FOREST_PINE, 1.3),
         (20, 74, 7.0, TerrainId.FOREST_PINE, 1.7),
         (48, 74, 5.5, TerrainId.FOREST_OAK, 2.8),
         (16, 12, 7.5, TerrainId.FOREST_PINE, 3.9),
@@ -768,8 +877,8 @@ def build_horde_scenario():
         (126, 94, 6.5, TerrainId.FOREST_PINE, 2.5),
         (172, 96, 7.0, TerrainId.FOREST_OAK, 3.2),
         (184, 136, 7.5, TerrainId.FOREST_PINE, 0.7),
-        (184, 168, 7.0, TerrainId.FOREST_OAK, 1.9),
-        (126, 182, 6.5, TerrainId.FOREST_OAK, 2.4),
+        (184, 168, 6.0, TerrainId.FOREST_OAK, 1.9),
+        (126, 172, 5.5, TerrainId.FOREST_OAK, 2.4),
         (184, 22, 7.0, TerrainId.FOREST_PINE, 3.7),
     ]:
         paint_organic_forest(mm, fx, fy, radius=r, terrain_id=t_id, seed=seed)
@@ -777,13 +886,17 @@ def build_horde_scenario():
     populate_forest_trees(mm, um, grid)
 
     # ==============================================================================
-    # 5. TRIGGERY: INICJALIZACJA, KARTOGRAFIA, ETAPOWE ULEPSZENIA KUŹNI I 6 MUTANTÓW
+    # 5. TRIGGERY: INICJALIZACJA, MINIMALNY LOS=4 DLA REVEALERÓW I BOSSOWIE
     # ==============================================================================
     t_init = tm.add_trigger("01_Init_Diplomacy_And_Cartography", enabled=True, looping=False)
 
     research_techs(t_init, human_players, [TECH_CARTOGRAPHY])
-    safe_modify_attribute(t_init, PlayerId.ONE, MAP_REVEALER_ID, ATTR_LINE_OF_SIGHT, Operation.SET, 10)
-    safe_modify_attribute(t_init, PlayerId.THREE, FEITORIA_ID, ATTR_HIT_POINTS, Operation.ADD, 5000)
+    # Minimalny Line of Sight = 4 dla Map Revealera: odkrywa wyłącznie sam budynek zadania i zostaje na zawsze!
+    safe_modify_attribute(t_init, PlayerId.ONE, MAP_REVEALER_ID, ATTR_LINE_OF_SIGHT, Operation.SET, 4)
+
+    # Feitoria należy do Gracza 2: +3000 HP oraz +20 limitu populacji dla P2
+    safe_modify_attribute(t_init, PlayerId.TWO, FEITORIA_ID, ATTR_HIT_POINTS, Operation.ADD, 3000)
+    add_player_resource(t_init, PlayerId.TWO, RES_BONUS_POP_CAP, 20)
 
     for h1 in human_players:
         safe_modify_attribute(t_init, h1, FORTIFIED_PALISADE_ID, ATTR_HIT_POINTS, Operation.ADD, 400)
@@ -799,45 +912,45 @@ def build_horde_scenario():
             if ai1 != ai2:
                 safe_call(t_init.new_effect.change_diplomacy, source_player=ai1, target_player=ai2, diplomacy=DiplomacyState.ALLY)
 
-    # Ery AI badane w 0:01 (aby nie nadpisywały statystyk mutantów), ale ulepszenia Kuźni wchodzą etapami!
     research_techs(t_init, ai_players, [TECH_FEUDAL_AGE, TECH_CASTLE_AGE, TECH_IMPERIAL_AGE])
+    research_techs(t_init, [PlayerId.EIGHT], [TECH_FAITH])
 
-    # Etap 1 Kuźni AI (10:00 - Feudalne ulepszenia +1)
-    t_ai_smith_feudal = tm.add_trigger("01d_AI_Techs_Feudal_10m", enabled=True, looping=False)
-    safe_call(t_ai_smith_feudal.new_condition.timer, timer=600)
+    # Etap 1 Kuźni AI (8:30 - Feudalne ulepszenia +1)
+    t_ai_smith_feudal = tm.add_trigger("01d_AI_Techs_Feudal_8m30s", enabled=True, looping=False)
+    safe_call(t_ai_smith_feudal.new_condition.timer, timer=510)
     research_techs(t_ai_smith_feudal, [PlayerId.FIVE], [TECH_SCALE_MAIL])
     research_techs(t_ai_smith_feudal, [PlayerId.SIX], [TECH_FLETCHING])
     research_techs(t_ai_smith_feudal, [PlayerId.SEVEN], [TECH_FORGING, TECH_BLOODLINES])
     research_techs(t_ai_smith_feudal, [PlayerId.EIGHT], [TECH_FORGING, TECH_SCALE_BARDING])
 
-    # Etap 2 Kuźni AI (16:00 - Zamkowe ulepszenia +2 i Balistyka)
-    t_ai_smith_castle = tm.add_trigger("01e_AI_Techs_Castle_16m", enabled=True, looping=False)
-    safe_call(t_ai_smith_castle.new_condition.timer, timer=960)
+    # Etap 2 Kuźni AI (18:00 - Zamkowe ulepszenia +2 i Balistyka)
+    t_ai_smith_castle = tm.add_trigger("01e_AI_Techs_Castle_18m", enabled=True, looping=False)
+    safe_call(t_ai_smith_castle.new_condition.timer, timer=1080)
     research_techs(t_ai_smith_castle, [PlayerId.FIVE], [TECH_CHAIN_MAIL, TECH_SQUIRES])
     research_techs(t_ai_smith_castle, [PlayerId.SIX], [TECH_BODKIN_ARROW, TECH_BALLISTICS])
     research_techs(t_ai_smith_castle, [PlayerId.SEVEN], [TECH_IRON_CASTING, TECH_HUSBANDRY])
     research_techs(t_ai_smith_castle, [PlayerId.EIGHT], [TECH_IRON_CASTING, TECH_CHAIN_BARDING])
 
-    # Etap 3 Kuźni AI (28:00 - Imperialne ulepszenia +3, Chemia i Siege Engineers)
-    t_ai_smith_imp = tm.add_trigger("01f_AI_Techs_Imperial_28m", enabled=True, looping=False)
-    safe_call(t_ai_smith_imp.new_condition.timer, timer=1680)
+    # Etap 3 Kuźni AI (34:30 - Imperialne ulepszenia +3, Chemia i Siege Engineers)
+    t_ai_smith_imp = tm.add_trigger("01f_AI_Techs_Imperial_34m30s", enabled=True, looping=False)
+    safe_call(t_ai_smith_imp.new_condition.timer, timer=2070)
     research_techs(t_ai_smith_imp, [PlayerId.FIVE], [TECH_PLATE_MAIL])
     research_techs(t_ai_smith_imp, [PlayerId.SIX], [TECH_BRACER, TECH_CHEMISTRY, TECH_SIEGE_ENGINEERS])
     research_techs(t_ai_smith_imp, [PlayerId.SEVEN], [TECH_BLAST_FURNACE])
     research_techs(t_ai_smith_imp, [PlayerId.EIGHT], [TECH_BLAST_FURNACE, TECH_PLATE_BARDING, TECH_SIEGE_ENGINEERS])
 
     building_labels = [
-        (allied_citadel, "Cytadela Sojuszu (Serce Twierdzy - Broncie jej!)"),
-        (q1_bldg, "Q1: Karawanseraj (+500 Zlota i 3 Wozy)"),
-        (q2_bldg, "Q2: Klif Artylerii (Ulepszenia + Atak)"),
-        (q3_bldg, "Q3: Skarbiec (Zasoby + Staly dochod)"),
-        (q4_bldg, "Q4: Krwawy Oltarz (+50 HP i slabsi Magowie)"),
+        (allied_citadel, "Cytadela Sojuszu P2 (Serce Twierdzy - Broncie jej!)"),
+        (q1_bldg, "Q1: Karawanseraj (Buduje Mur Handlowy, +30 Pop i +20% Eko)"),
+        (q2_bldg, "Q2: Klif Artylerii (+2 Zasiegu, +4 Ataku, Szybkosc)"),
+        (q3_bldg, "Q3: Skarbiec (+20 Pop i Duzy Staly Dochod)"),
+        (q4_bldg, "Q4: Krwawy Oltarz (+30% HP Armii i +40% Produkcji)"),
         (s_g1_north, "G1 Polnocny (Berserkerzy i Petardy)"),
         (s_g1_east,  "G1 Wschodni (Huskarlowie i Wielblady)"),
-        (s_g2_snipers, "G2 Akademia (Snajperzy i Kolosy)"),
-        (s_g2_mages,   "G2 Klasztor (Magowie i Szamani)"),
-        (s_g3_north, "G3 Cytadela Pln. (Tytani Sloniowi)"),
-        (s_g3_east,  "G3 Cytadela Wsch. (Tytani i Artyleria)"),
+        (s_g2_snipers, "G2 Akademia (Snajperzy i Mozdzierze)"),
+        (s_g2_mages,   "G2 Klasztor (Arcymagowie i Szakale)"),
+        (s_g3_north, "G3 Cytadela Pln. (Zelazne Slonie-Tanki)"),
+        (s_g3_east,  "G3 Cytadela Wsch. (Slonie-Tanki i Artyleria)"),
     ]
     for b_unit, label_text in building_labels:
         safe_call(
@@ -848,93 +961,119 @@ def build_horde_scenario():
 
     send_highlight_chat(
         t_init, "<YELLOW>",
-        "=== KRONIKI RUBIEZY === Pierwsza fala (Feudalna) za 10 minut! Jednostki specjalne beda wchodzic stopniowo w kolejnych falach.",
+        "=== KRONIKI RUBIEZY v5.2 === Fala 1 w 8:30 (bez taranow), Fala 2 w 13:00 (z taranem/mangonelem, bez mutantow), specjalisci od 18:00!",
     )
 
-    # Trigger nakładający mutacje 6 specjalnych jednostek w 3. sekundzie gry
-    t_mutate = tm.add_trigger("01b_Apply_6_Custom_Unit_Mutations", enabled=True, looping=False)
+    # Trigger nakładający mutacje 6 wyspecjalizowanych klas w 3. sekundzie gry
+    t_mutate = tm.add_trigger("01b_Apply_Specialized_Unit_Archetypes", enabled=True, looping=False)
     safe_call(t_mutate.new_condition.timer, timer=3)
 
-    # 1. SNAJPERZY (Elitarny Janczar P6)
-    safe_modify_attribute(t_mutate, PlayerId.SIX, UnitInfo.ELITE_JANISSARY.ID, ATTR_MAXIMUM_RANGE, Operation.SET, BALANCE["sniper_range"])
-    safe_modify_attribute(t_mutate, PlayerId.SIX, UnitInfo.ELITE_JANISSARY.ID, ATTR_SEARCH_RADIUS, Operation.SET, 22)
-    safe_modify_attribute(t_mutate, PlayerId.SIX, UnitInfo.ELITE_JANISSARY.ID, ATTR_LINE_OF_SIGHT, Operation.SET, 22)
-    safe_modify_attribute(t_mutate, PlayerId.SIX, UnitInfo.ELITE_JANISSARY.ID, ATTR_ATTACK_RELOAD_TIME, Operation.SET, BALANCE["sniper_reload"])
+    # WYŁĄCZENIE KONWERSJI TYLKO U MNICHÓW / IMAMÓW WROGA (Gracze P1-P4 mają w 100% normalnych Mnichów!)
+    for ai_p in ai_players:
+        for monk_id in [IMAM_UNIT_ID, UnitInfo.MISSIONARY.ID, UnitInfo.MONK.ID]:
+            safe_modify_attribute(t_mutate, ai_p, monk_id, ATTR_MAXIMUM_RANGE, Operation.SET, 0)
+            safe_modify_attribute(t_mutate, ai_p, monk_id, ATTR_WORK_RATE, Operation.SET, 0)
+
+    # 1. TARAN-ŻÓŁW / ŻELAZNY SŁOŃ (Tank P8: 1450 HP, Hero Glow = 1, odporny na konwersję, 3 dmg w jednostki, +220 w budynki)
+    safe_modify_attribute(t_mutate, PlayerId.EIGHT, ELITE_BATTLE_ELEPHANT_ID, ATTR_HIT_POINTS, Operation.SET, BALANCE["tank_hp"])
+    safe_modify_attribute(t_mutate, PlayerId.EIGHT, ELITE_BATTLE_ELEPHANT_ID, ATTR_HERO_STATUS, Operation.SET, 1)
+    safe_modify_attribute(t_mutate, PlayerId.EIGHT, ELITE_BATTLE_ELEPHANT_ID, ATTR_MOVEMENT_SPEED, Operation.SET, BALANCE["tank_speed"])
+    safe_modify_attribute(t_mutate, PlayerId.EIGHT, ELITE_BATTLE_ELEPHANT_ID, ATTR_ATTACK, Operation.SET, BALANCE["tank_unit_atk"], armor_class=4)
+    safe_modify_attribute(t_mutate, PlayerId.EIGHT, ELITE_BATTLE_ELEPHANT_ID, ATTR_ATTACK, Operation.ADD, BALANCE["tank_bldg_bonus"], armor_class=11)
+    safe_modify_attribute(t_mutate, PlayerId.EIGHT, ELITE_BATTLE_ELEPHANT_ID, ATTR_ATTACK, Operation.ADD, BALANCE["tank_bldg_bonus"], armor_class=21)
+    safe_modify_attribute(t_mutate, PlayerId.EIGHT, ELITE_BATTLE_ELEPHANT_ID, ATTR_ARMOR, Operation.SET, BALANCE["tank_melee_armor"], armor_class=4)
+    safe_modify_attribute(t_mutate, PlayerId.EIGHT, ELITE_BATTLE_ELEPHANT_ID, ATTR_ARMOR, Operation.SET, BALANCE["tank_pierce_armor"], armor_class=3)
+
+    # 2. SZAKAL DYWERSYJNY (Eco-Raider Huzar P7: 95 HP, prędkość 1.62, +6 pancerza na strzały, tylko 2 ataku)
+    safe_modify_attribute(t_mutate, PlayerId.SEVEN, HUSSAR_ID, ATTR_HIT_POINTS, Operation.SET, BALANCE["raider_hp"])
+    safe_modify_attribute(t_mutate, PlayerId.SEVEN, HUSSAR_ID, ATTR_MOVEMENT_SPEED, Operation.SET, BALANCE["raider_speed"])
+    safe_modify_attribute(t_mutate, PlayerId.SEVEN, HUSSAR_ID, ATTR_ATTACK, Operation.SET, BALANCE["raider_atk"], armor_class=4)
+    safe_modify_attribute(t_mutate, PlayerId.SEVEN, HUSSAR_ID, ATTR_ARMOR, Operation.SET, BALANCE["raider_pierce_armor"], armor_class=3)
+    safe_modify_attribute(t_mutate, PlayerId.SEVEN, HUSSAR_ID, ATTR_ARMOR, Operation.SET, 0, armor_class=4)
+
+    # 3. ARCYMAG TARCZY (Imam P7: 240 HP, 3/4 pancerza, Hero Glow = 1, regeneracja 300 HP/min = 5 HP/s)
+    safe_modify_attribute(t_mutate, PlayerId.SEVEN, IMAM_UNIT_ID, ATTR_HIT_POINTS, Operation.SET, BALANCE["mage_hp"])
+    safe_modify_attribute(t_mutate, PlayerId.SEVEN, IMAM_UNIT_ID, ATTR_HERO_STATUS, Operation.SET, 1)
+    safe_modify_attribute(t_mutate, PlayerId.SEVEN, IMAM_UNIT_ID, ATTR_REGENERATION_RATE, Operation.SET, BALANCE["mage_regen_per_min"])
+    safe_modify_attribute(t_mutate, PlayerId.SEVEN, IMAM_UNIT_ID, ATTR_MOVEMENT_SPEED, Operation.SET, BALANCE["mage_speed"])
+    safe_modify_attribute(t_mutate, PlayerId.SEVEN, IMAM_UNIT_ID, ATTR_ARMOR, Operation.SET, BALANCE["mage_pierce_armor"], armor_class=3)
+    safe_modify_attribute(t_mutate, PlayerId.SEVEN, IMAM_UNIT_ID, ATTR_ARMOR, Operation.SET, BALANCE["mage_melee_armor"], armor_class=4)
+
+    # 4. MOŹDZIERZ OBLĘŻNICZY (Siege Onager P6: 350 HP, Hero Glow = 1, 21 zasięgu, MARTWA STREFA 6 kratek, przeładowanie 10s)
+    safe_modify_attribute(t_mutate, PlayerId.SIX, SIEGE_ONAGER_ID, ATTR_HIT_POINTS, Operation.SET, BALANCE["mortar_hp"])
+    safe_modify_attribute(t_mutate, PlayerId.SIX, SIEGE_ONAGER_ID, ATTR_HERO_STATUS, Operation.SET, 1)
+    safe_modify_attribute(t_mutate, PlayerId.SIX, SIEGE_ONAGER_ID, ATTR_MAXIMUM_RANGE, Operation.SET, BALANCE["mortar_range"])
+    safe_modify_attribute(t_mutate, PlayerId.SIX, SIEGE_ONAGER_ID, ATTR_MINIMUM_RANGE, Operation.SET, BALANCE["mortar_min_range"])
+    safe_modify_attribute(t_mutate, PlayerId.SIX, SIEGE_ONAGER_ID, ATTR_SEARCH_RADIUS, Operation.SET, 23)
+    safe_modify_attribute(t_mutate, PlayerId.SIX, SIEGE_ONAGER_ID, ATTR_LINE_OF_SIGHT, Operation.SET, 23)
+    safe_modify_attribute(t_mutate, PlayerId.SIX, SIEGE_ONAGER_ID, ATTR_ATTACK_RELOAD_TIME, Operation.SET, BALANCE["mortar_reload"])
+    safe_modify_attribute(t_mutate, PlayerId.SIX, SIEGE_ONAGER_ID, ATTR_BLAST_WIDTH, Operation.SET, BALANCE["mortar_blast_width"])
+    safe_modify_attribute(t_mutate, PlayerId.SIX, SIEGE_ONAGER_ID, ATTR_MOVEMENT_SPEED, Operation.SET, BALANCE["mortar_speed"])
+    safe_modify_attribute(t_mutate, PlayerId.SIX, SIEGE_ONAGER_ID, ATTR_ATTACK, Operation.ADD, BALANCE["mortar_bonus_atk"], armor_class=4)
+
+    # 5. SNAJPER IMPERIALNY (Elitarny Janczar P6: 90 HP, Hero Glow = 1, 19 zasięgu, +85 ataku, przeładowanie 6.5s)
     safe_modify_attribute(t_mutate, PlayerId.SIX, UnitInfo.ELITE_JANISSARY.ID, ATTR_HIT_POINTS, Operation.SET, BALANCE["sniper_hp"])
+    safe_modify_attribute(t_mutate, PlayerId.SIX, UnitInfo.ELITE_JANISSARY.ID, ATTR_HERO_STATUS, Operation.SET, 1)
+    safe_modify_attribute(t_mutate, PlayerId.SIX, UnitInfo.ELITE_JANISSARY.ID, ATTR_MAXIMUM_RANGE, Operation.SET, BALANCE["sniper_range"])
+    safe_modify_attribute(t_mutate, PlayerId.SIX, UnitInfo.ELITE_JANISSARY.ID, ATTR_SEARCH_RADIUS, Operation.SET, 21)
+    safe_modify_attribute(t_mutate, PlayerId.SIX, UnitInfo.ELITE_JANISSARY.ID, ATTR_LINE_OF_SIGHT, Operation.SET, 21)
+    safe_modify_attribute(t_mutate, PlayerId.SIX, UnitInfo.ELITE_JANISSARY.ID, ATTR_ATTACK_RELOAD_TIME, Operation.SET, BALANCE["sniper_reload"])
     safe_modify_attribute(t_mutate, PlayerId.SIX, UnitInfo.ELITE_JANISSARY.ID, ATTR_ATTACK, Operation.ADD, BALANCE["sniper_bonus_atk"], armor_class=3)
-    safe_modify_attribute(t_mutate, PlayerId.SIX, UnitInfo.ELITE_JANISSARY.ID, ATTR_ATTACK, Operation.ADD, BALANCE["sniper_bonus_atk"], armor_class=4)
 
-    # 2. KOLOSY OBLĘŻNICZE (Siege Onager P6)
-    safe_modify_attribute(t_mutate, PlayerId.SIX, SIEGE_ONAGER_ID, ATTR_HIT_POINTS, Operation.SET, BALANCE["colossus_hp"])
-    safe_modify_attribute(t_mutate, PlayerId.SIX, SIEGE_ONAGER_ID, ATTR_MAXIMUM_RANGE, Operation.SET, BALANCE["colossus_range"])
-    safe_modify_attribute(t_mutate, PlayerId.SIX, SIEGE_ONAGER_ID, ATTR_SEARCH_RADIUS, Operation.SET, 24)
-    safe_modify_attribute(t_mutate, PlayerId.SIX, SIEGE_ONAGER_ID, ATTR_LINE_OF_SIGHT, Operation.SET, 24)
-    safe_modify_attribute(t_mutate, PlayerId.SIX, SIEGE_ONAGER_ID, ATTR_ATTACK_RELOAD_TIME, Operation.SET, BALANCE["colossus_reload"])
-    safe_modify_attribute(t_mutate, PlayerId.SIX, SIEGE_ONAGER_ID, ATTR_BLAST_WIDTH, Operation.SET, BALANCE["colossus_blast_width"])
-    safe_modify_attribute(t_mutate, PlayerId.SIX, SIEGE_ONAGER_ID, ATTR_MOVEMENT_SPEED, Operation.SET, BALANCE["colossus_speed"])
-    safe_modify_attribute(t_mutate, PlayerId.SIX, SIEGE_ONAGER_ID, ATTR_ATTACK, Operation.ADD, BALANCE["colossus_bonus_atk"], armor_class=3)
-    safe_modify_attribute(t_mutate, PlayerId.SIX, SIEGE_ONAGER_ID, ATTR_ATTACK, Operation.ADD, BALANCE["colossus_bonus_atk"], armor_class=4)
-
-    # 3. FANATYCY KAMIKAZE I PŁONĄCE WIELBŁĄDY (Petard & Flaming Camel P5)
+    # 6. BERSERKERZY I KAMIKAZE (P5: szybkie jednostki przełamania o 0 pancerzu na strzały)
     for kamikaze_id in [PETARD_ID, FLAMING_CAMEL_ID]:
         safe_modify_attribute(t_mutate, PlayerId.FIVE, kamikaze_id, ATTR_HIT_POINTS, Operation.SET, BALANCE["kamikaze_hp"])
-        safe_modify_attribute(t_mutate, PlayerId.FIVE, kamikaze_id, ATTR_MOVEMENT_SPEED, Operation.MULTIPLY, BALANCE["kamikaze_speed_mult"])
+        safe_modify_attribute(t_mutate, PlayerId.FIVE, kamikaze_id, ATTR_MOVEMENT_SPEED, Operation.SET, BALANCE["kamikaze_speed"])
         safe_modify_attribute(t_mutate, PlayerId.FIVE, kamikaze_id, ATTR_BLAST_WIDTH, Operation.SET, BALANCE["kamikaze_blast_width"])
         safe_modify_attribute(t_mutate, PlayerId.FIVE, kamikaze_id, ATTR_ATTACK, Operation.ADD, BALANCE["kamikaze_bonus_atk"], armor_class=4)
+        safe_modify_attribute(t_mutate, PlayerId.FIVE, kamikaze_id, ATTR_ARMOR, Operation.SET, 0, armor_class=3)
 
-    # 4. BERSERKERZY SZTURMOWI (Elite Berserk P5)
     safe_modify_attribute(t_mutate, PlayerId.FIVE, ELITE_BERSERK_ID, ATTR_HIT_POINTS, Operation.SET, BALANCE["berserk_hp"])
     safe_modify_attribute(t_mutate, PlayerId.FIVE, ELITE_BERSERK_ID, ATTR_MOVEMENT_SPEED, Operation.SET, BALANCE["berserk_speed"])
     safe_modify_attribute(t_mutate, PlayerId.FIVE, ELITE_BERSERK_ID, ATTR_ATTACK, Operation.ADD, BALANCE["berserk_bonus_atk"], armor_class=4)
+    safe_modify_attribute(t_mutate, PlayerId.FIVE, ELITE_BERSERK_ID, ATTR_ARMOR, Operation.SET, 0, armor_class=3)
 
-    # 5. TYTANI HORDY (Elite Battle Elephant P8)
-    safe_modify_attribute(t_mutate, PlayerId.EIGHT, ELITE_BATTLE_ELEPHANT_ID, ATTR_HIT_POINTS, Operation.SET, BALANCE["titan_hp"])
-    safe_modify_attribute(t_mutate, PlayerId.EIGHT, ELITE_BATTLE_ELEPHANT_ID, ATTR_BLAST_WIDTH, Operation.SET, BALANCE["titan_blast_width"])
-    safe_modify_attribute(t_mutate, PlayerId.EIGHT, ELITE_BATTLE_ELEPHANT_ID, ATTR_ATTACK, Operation.ADD, BALANCE["titan_bonus_atk"], armor_class=4)
+    # Uzbrojenie detektorów garnizonów w 4. sekundzie gry (z uwzględnieniem stałego Map Revealera Gracza 1!)
+    t_arm_garrisons = tm.add_trigger("01c_Arm_Garrison_Detectors_At_4s", enabled=True, looping=False)
+    safe_call(t_arm_garrisons.new_condition.timer, timer=4)
 
-    # 6. MAGOWIE NIEŚMIERTELNOŚCI (Imam P7) oraz SZAMANI KRWI (Misjonarz P7)
-    safe_modify_attribute(t_mutate, PlayerId.SEVEN, IMAM_UNIT_ID, ATTR_HIT_POINTS, Operation.SET, BALANCE["mage_hp"])
-    safe_modify_attribute(t_mutate, PlayerId.SEVEN, IMAM_UNIT_ID, ATTR_ARMOR, Operation.ADD, 8, armor_class=3)
-    safe_modify_attribute(t_mutate, PlayerId.SEVEN, IMAM_UNIT_ID, ATTR_ARMOR, Operation.ADD, 8, armor_class=4)
-    safe_modify_attribute(t_mutate, PlayerId.SEVEN, UnitInfo.MISSIONARY.ID, ATTR_WORK_RATE, Operation.MULTIPLY, 6.0)
-    safe_modify_attribute(t_mutate, PlayerId.SEVEN, UnitInfo.MISSIONARY.ID, ATTR_HIT_POINTS, Operation.SET, 280)
+    add_guarded_camp_with_leash(tm, t_arm_garrisons, "Quest1_Caravan", PlayerId.FIVE, *q1_pos,
+                                units_spec=[(UnitInfo.STEPPE_LANCER.ID, 12), (UnitInfo.CROSSBOWMAN.ID, 10), (ELITE_BERSERK_ID, 4)])
+    add_guarded_camp_with_leash(tm, t_arm_garrisons, "Quest2_SniperCliff", PlayerId.SIX, *q2_pos,
+                                units_spec=[(UnitInfo.ELITE_JANISSARY.ID, 6), (SIEGE_ONAGER_ID, 2), (UnitInfo.HALBERDIER.ID, 14)])
+    add_guarded_camp_with_leash(tm, t_arm_garrisons, "Quest3_SiegeVault", PlayerId.EIGHT, *q3_pos,
+                                units_spec=[(UnitInfo.HALBERDIER.ID, 18), (ELITE_BATTLE_ELEPHANT_ID, 2), (UnitInfo.ARBALESTER.ID, 14)])
+    add_guarded_camp_with_leash(tm, t_arm_garrisons, "Quest4_BloodAltar", PlayerId.EIGHT, *q4_pos,
+                                units_spec=[(UnitInfo.PALADIN.ID, 14), (ELITE_BATTLE_ELEPHANT_ID, 2), (UnitInfo.HALBERDIER.ID, 12)])
 
-    # Detektory garnizonów uzbrajane w 6. minucie gry
-    t_arm_garrisons = tm.add_trigger("01c_Arm_Garrison_Detectors_At_6m", enabled=True, looping=False)
-    safe_call(t_arm_garrisons.new_condition.timer, timer=360)
-
-    add_proximity_garrison_trigger(tm, t_arm_garrisons, "Quest1_Caravan", PlayerId.FIVE, *q1_pos,
-                                   units_spec=[(UnitInfo.STEPPE_LANCER.ID, 8), (FLAMING_CAMEL_ID, 2)])
-    add_proximity_garrison_trigger(tm, t_arm_garrisons, "Quest2_SniperCliff", PlayerId.SIX, *q2_pos,
-                                   units_spec=[(UnitInfo.ELITE_JANISSARY.ID, 6), (SIEGE_ONAGER_ID, 2)])
-    add_proximity_garrison_trigger(tm, t_arm_garrisons, "Quest3_SiegeVault", PlayerId.EIGHT, *q3_pos,
-                                   units_spec=[(UnitInfo.HALBERDIER.ID, 12), (ELITE_BATTLE_ELEPHANT_ID, 3)])
-    add_proximity_garrison_trigger(tm, t_arm_garrisons, "Quest4_BloodAltar", PlayerId.EIGHT, *q4_pos,
-                                   units_spec=[(UnitInfo.PALADIN.ID, 10), (UnitInfo.MISSIONARY.ID, 4)])
-
-    add_proximity_garrison_trigger(tm, t_arm_garrisons, "Settle_G1_North", PlayerId.FIVE, *s_coords["G1_North"],
-                                   units_spec=[(ELITE_BERSERK_ID, 8), (PETARD_ID, 3)])
-    add_proximity_garrison_trigger(tm, t_arm_garrisons, "Settle_G1_East", PlayerId.FIVE, *s_coords["G1_East"],
-                                   units_spec=[(UnitInfo.HUSKARL.ID, 10), (FLAMING_CAMEL_ID, 3)])
-    add_proximity_garrison_trigger(tm, t_arm_garrisons, "Settle_G2_Snipers", PlayerId.SIX, *s_coords["G2_Snipers"],
-                                   units_spec=[(UnitInfo.ELITE_JANISSARY.ID, 8), (SIEGE_ONAGER_ID, 2)])
-    add_proximity_garrison_trigger(tm, t_arm_garrisons, "Settle_G2_Mages", PlayerId.SEVEN, *s_coords["G2_Mages"],
-                                   units_spec=[(UnitInfo.CAVALIER.ID, 12), (UnitInfo.MISSIONARY.ID, 4)])
-    add_proximity_garrison_trigger(tm, t_arm_garrisons, "Settle_G3_North", PlayerId.EIGHT, *s_coords["G3_North"],
-                                   units_spec=[(ELITE_BATTLE_ELEPHANT_ID, 6), (UnitInfo.HALBERDIER.ID, 16)])
-    add_proximity_garrison_trigger(tm, t_arm_garrisons, "Settle_G3_East", PlayerId.EIGHT, *s_coords["G3_East"],
-                                   units_spec=[(ELITE_BATTLE_ELEPHANT_ID, 6), (UnitInfo.ARBALESTER.ID, 16), (SIEGE_ONAGER_ID, 2)])
+    add_guarded_camp_with_leash(tm, t_arm_garrisons, "Settle_G1_North", PlayerId.FIVE, *s_coords["G1_North"],
+                                units_spec=[(UnitInfo.PIKEMAN.ID, 14), (ELITE_BERSERK_ID, 6), (UnitInfo.CROSSBOWMAN.ID, 8)])
+    add_guarded_camp_with_leash(tm, t_arm_garrisons, "Settle_G1_East", PlayerId.FIVE, *s_coords["G1_East"],
+                                units_spec=[(UnitInfo.HUSKARL.ID, 12), (UnitInfo.PIKEMAN.ID, 10), (FLAMING_CAMEL_ID, 3)])
+    add_guarded_camp_with_leash(tm, t_arm_garrisons, "Settle_G2_Snipers", PlayerId.SIX, *s_coords["G2_Snipers"],
+                                units_spec=[(UnitInfo.ELITE_JANISSARY.ID, 7), (SIEGE_ONAGER_ID, 2), (UnitInfo.HALBERDIER.ID, 16)])
+    add_guarded_camp_with_leash(tm, t_arm_garrisons, "Settle_G2_Mages", PlayerId.SEVEN, *s_coords["G2_Mages"],
+                                units_spec=[(UnitInfo.CAVALIER.ID, 14), (HUSSAR_ID, 8), (IMAM_UNIT_ID, 1)])
+    add_guarded_camp_with_leash(tm, t_arm_garrisons, "Settle_G3_North", PlayerId.EIGHT, *s_coords["G3_North"],
+                                units_spec=[(ELITE_BATTLE_ELEPHANT_ID, 3), (UnitInfo.HALBERDIER.ID, 20), (UnitInfo.PALADIN.ID, 12)])
+    add_guarded_camp_with_leash(tm, t_arm_garrisons, "Settle_G3_East", PlayerId.EIGHT, *s_coords["G3_East"],
+                                units_spec=[(ELITE_BATTLE_ELEPHANT_ID, 3), (UnitInfo.ARBALESTER.ID, 20), (SIEGE_ONAGER_ID, 2)])
 
     # ==============================================================================
-    # 6. LOKALNA AURA MAGÓW (PROMIEŃ 25 KRATEK WOKÓŁ BRAMY CENTRALNEJ)
+    # 6. GLOBALNA AURA MAGÓW (+30/+30 PANCERZA + LECZENIE OBSZAROWE HORDY + FLARA)
     # ==============================================================================
     r_local = BALANCE["mage_local_radius"]
     mx1, my1 = max(0, gate_center[0] - r_local), max(0, gate_center[1] - r_local)
     mx2, my2 = min(MAP_SIZE - 1, gate_center[0] + r_local), min(MAP_SIZE - 1, gate_center[1] + r_local)
 
-    p7_shielded_units = [UnitInfo.KNIGHT.ID, UnitInfo.CAVALIER.ID, UnitInfo.PALADIN.ID, UnitInfo.CAPPED_RAM.ID, UnitInfo.SIEGE_RAM.ID]
+    global_shielded_units = [
+        UnitInfo.MAN_AT_ARMS.ID, UnitInfo.PIKEMAN.ID, UnitInfo.HALBERDIER.ID, UnitInfo.HUSKARL.ID,
+        UnitInfo.ARCHER.ID, UnitInfo.CROSSBOWMAN.ID, UnitInfo.ARBALESTER.ID,
+        UnitInfo.KNIGHT.ID, UnitInfo.CAVALIER.ID, UnitInfo.PALADIN.ID,
+        UnitInfo.CAPPED_RAM.ID, UnitInfo.SIEGE_RAM.ID,
+    ]
 
-    t_shield_on = tm.add_trigger("02a_Mage_Local_25Tile_Shield_On", enabled=False, looping=False)
+    t_shield_on = tm.add_trigger("02a_Mage_Global_Horde_Shield_On", enabled=False, looping=False)
     safe_call(
         t_shield_on.new_condition.objects_in_area,
         source_player=PlayerId.SEVEN,
@@ -943,183 +1082,301 @@ def build_horde_scenario():
         area_x1=mx1, area_y1=my1, area_x2=mx2, area_y2=my2,
         quantity=1,
     )
-    for u_id in p7_shielded_units:
-        safe_modify_attribute(t_shield_on, PlayerId.SEVEN, u_id, ATTR_ARMOR, Operation.ADD, BALANCE["mage_shield_armor"], armor_class=3)
-        safe_modify_attribute(t_shield_on, PlayerId.SEVEN, u_id, ATTR_ARMOR, Operation.ADD, BALANCE["mage_shield_armor"], armor_class=4)
+    for ai_p in ai_players:
+        for u_id in global_shielded_units:
+            safe_modify_attribute(t_shield_on, ai_p, u_id, ATTR_ARMOR, Operation.ADD, BALANCE["mage_shield_armor"], armor_class=3)
+            safe_modify_attribute(t_shield_on, ai_p, u_id, ATTR_ARMOR, Operation.ADD, BALANCE["mage_shield_armor"], armor_class=4)
 
-    t_local_heal = tm.add_trigger("02b_Mage_Local_25Tile_Heal_Pulse", enabled=False, looping=True)
-    safe_call(t_local_heal.new_condition.timer, timer=2)
+    # Puls leczenia Hordy przez Arcymaga (+15 HP co 3s w strefie 25 kratek, bez możliwości konwersji!)
+    t_mage_heal_pulse = tm.add_trigger("02b_Mage_AoE_Heal_Pulse_3s", enabled=False, looping=True)
+    safe_call(t_mage_heal_pulse.new_condition.timer, timer=3)
     safe_call(
-        t_local_heal.new_condition.objects_in_area,
+        t_mage_heal_pulse.new_condition.objects_in_area,
         source_player=PlayerId.SEVEN,
         object_list=IMAM_UNIT_ID,
         object_list_unit_id=IMAM_UNIT_ID,
         area_x1=mx1, area_y1=my1, area_x2=mx2, area_y2=my2,
         quantity=1,
     )
-    for ai_p in [PlayerId.SEVEN, PlayerId.EIGHT]:
+    for ai_p in ai_players:
         safe_call(
-            t_local_heal.new_effect.heal_object,
+            t_mage_heal_pulse.new_effect.heal_object,
             source_player=ai_p,
             area_x1=mx1, area_y1=my1, area_x2=mx2, area_y2=my2,
-            quantity=BALANCE["mage_local_heal_2s"],
+            quantity=BALANCE["mage_aoe_heal_3s"],
         )
 
-    t_shield_off = tm.add_trigger("02c_Mage_Local_Shield_Off", enabled=False, looping=False)
+    # Pętla flary co 8 sekund wskazująca dokładną pozycję Arcymaga
+    t_mage_beacon = tm.add_trigger("02c_Mage_Visual_Flare_Beacon_8s", enabled=False, looping=True)
+    safe_call(t_mage_beacon.new_condition.timer, timer=8)
+    safe_call(
+        t_mage_beacon.new_condition.objects_in_area,
+        source_player=PlayerId.SEVEN,
+        object_list=IMAM_UNIT_ID,
+        object_list_unit_id=IMAM_UNIT_ID,
+        area_x1=mx1, area_y1=my1, area_x2=mx2, area_y2=my2,
+        quantity=1,
+    )
+    send_highlight_chat(
+        t_mage_beacon, "<PURPLE>",
+        "[FLARA - ARCYMAG TARCZY]: Arcymag (P7 - 240 HP, regen 5 HP/s) w kregu pochodni przed Brama Centralna leczy i utrzymuje +30 Pancerza na Hordzie!",
+        flare_x=114, flare_y=114,
+    )
+
+    t_shield_off = tm.add_trigger("02d_Mage_Global_Horde_Shield_Off", enabled=False, looping=False)
     safe_call(
         t_shield_off.new_condition.own_fewer_objects,
         source_player=PlayerId.SEVEN,
         object_list=IMAM_UNIT_ID,
         quantity=0,
     )
-    for u_id in p7_shielded_units:
-        safe_modify_attribute(t_shield_off, PlayerId.SEVEN, u_id, ATTR_ARMOR, Operation.SUBTRACT, BALANCE["mage_shield_armor"], armor_class=3)
-        safe_modify_attribute(t_shield_off, PlayerId.SEVEN, u_id, ATTR_ARMOR, Operation.SUBTRACT, BALANCE["mage_shield_armor"], armor_class=4)
-    safe_call(t_shield_off.new_effect.deactivate_trigger, trigger_id=t_local_heal.trigger_id)
+    for ai_p in ai_players:
+        for u_id in global_shielded_units:
+            safe_modify_attribute(t_shield_off, ai_p, u_id, ATTR_ARMOR, Operation.SUBTRACT, BALANCE["mage_shield_armor"], armor_class=3)
+            safe_modify_attribute(t_shield_off, ai_p, u_id, ATTR_ARMOR, Operation.SUBTRACT, BALANCE["mage_shield_armor"], armor_class=4)
+    safe_call(t_shield_off.new_effect.deactivate_trigger, trigger_id=t_mage_heal_pulse.trigger_id)
+    safe_call(t_shield_off.new_effect.deactivate_trigger, trigger_id=t_mage_beacon.trigger_id)
     send_highlight_chat(
         t_shield_off, "<GREEN>",
-        "[BARIERA PRZELAMANA]: Arcymagowie przed brama zabici! Jednostki P7 traca niesmiertelnosc!",
+        "[BARIERA PRZELAMANA]: Arcymag zabity! Wszystkie armie Hordy (P5, P6, P7, P8) traca +30 Pancerza i leczenie!",
     )
 
-    safe_call(t_shield_on.new_effect.activate_trigger, trigger_id=t_local_heal.trigger_id)
+    safe_call(t_shield_on.new_effect.activate_trigger, trigger_id=t_mage_heal_pulse.trigger_id)
+    safe_call(t_shield_on.new_effect.activate_trigger, trigger_id=t_mage_beacon.trigger_id)
     safe_call(t_shield_on.new_effect.activate_trigger, trigger_id=t_shield_off.trigger_id)
     send_highlight_chat(
         t_shield_on, "<PURPLE>",
-        "[LOKALNA AURA MAGA - 25 KRATEK]: Arcymag (P7) wszedl w strefe 25 kratek przed Brama Centralna (+60 Pancerza i regeneracja)! Zabijcie go!",
+        "[GLOBALNA AURA MAGA - 25 KRATEK]: Arcymag (240 HP, regen 5 HP/s, flara!) dal +30/+30 Pancerza i leczenie WSZYSTKIM frakcjom Hordy (P5-P8)! Skupcie na nim ogien!",
         flare_x=114, flare_y=114,
     )
 
+    # Pętla kierująca jednostki Hordy z przełęczy w głąb bazy
+    t_push_inside = tm.add_trigger("02e_Push_Gate_Units_Deep_Into_Base", enabled=True, looping=True)
+    safe_call(t_push_inside.new_condition.timer, timer=15)
+    gate_push_zones = [
+        (gate_north[0] - 8, gate_north[1] - 4, gate_north[0] + 8, gate_north[1] + 8, 48, 138),
+        (gate_center[0] - 8, gate_center[1] - 8, gate_center[0] + 4, gate_center[1] + 8, 54, 146),
+        (gate_east[0] - 8, gate_east[1] - 8, gate_east[0] + 4, gate_east[1] + 8, 68, 162),
+    ]
+    for ai_p in [PlayerId.FIVE, PlayerId.SIX, PlayerId.EIGHT]:
+        for gx1, gy1, gx2, gy2, p_tx, p_ty in gate_push_zones:
+            safe_call(
+                t_push_inside.new_effect.attack_move,
+                source_player=ai_p,
+                area_x1=gx1, area_y1=gy1, area_x2=gx2, area_y2=gy2,
+                location_x=p_tx, location_y=p_ty,
+            )
+
     # ==============================================================================
-    # 7. ESKALACJA STATYSTYK (START DOPIERO PO 1. ATAKU - CZYLI OD 14. MINUTY!)
+    # 7. TRZYSTOPNIOWE SKALOWANIE STATYSTYK (20:00, 45:00 ORAZ 55:00 ENDGAME)
     # ==============================================================================
     all_enemy_combat_units = [
         UnitInfo.MAN_AT_ARMS.ID, UnitInfo.PIKEMAN.ID, UnitInfo.HALBERDIER.ID, UnitInfo.HUSKARL.ID,
-        ELITE_BERSERK_ID, PETARD_ID, FLAMING_CAMEL_ID,
+        ELITE_BERSERK_ID,
         UnitInfo.ARCHER.ID, UnitInfo.CROSSBOWMAN.ID, UnitInfo.ARBALESTER.ID, UnitInfo.ELITE_JANISSARY.ID,
         UnitInfo.SCOUT_CAVALRY.ID, UnitInfo.KNIGHT.ID, UnitInfo.CAVALIER.ID, UnitInfo.PALADIN.ID,
         ELITE_BATTLE_ELEPHANT_ID, SIEGE_ONAGER_ID,
-        UnitInfo.BATTERING_RAM.ID, UnitInfo.CAPPED_RAM.ID, UnitInfo.SIEGE_RAM.ID,
     ]
 
-    t_escalate = tm.add_trigger("04_Global_Horde_Escalation", enabled=False, looping=True)
-    safe_call(t_escalate.new_condition.timer, timer=BALANCE["escalation_interval_sec"])
+    # Bieg 1 (od 20:00): +5 HP i +1 Ataku co 5 minut
+    t_enable_esc1 = tm.add_trigger("04a_Enable_Escalation_At_20m", enabled=True, looping=False)
+    safe_call(t_enable_esc1.new_condition.timer, timer=BALANCE["escalation_start_sec"])
+
+    t_escalate1 = tm.add_trigger("04b_Global_Horde_Escalation_Every_5m", enabled=False, looping=True)
+    safe_call(t_enable_esc1.new_effect.activate_trigger, trigger_id=t_escalate1.trigger_id)
+    safe_call(t_escalate1.new_condition.timer, timer=BALANCE["escalation_interval_sec"])
     for ai_p in ai_players:
         for u_id in all_enemy_combat_units:
-            safe_modify_attribute(t_escalate, ai_p, u_id, ATTR_HIT_POINTS, Operation.ADD, 25)
-            safe_modify_attribute(t_escalate, ai_p, u_id, ATTR_ATTACK, Operation.ADD, 2, armor_class=4)
-            safe_modify_attribute(t_escalate, ai_p, u_id, ATTR_ATTACK, Operation.ADD, 2, armor_class=3)
+            safe_modify_attribute(t_escalate1, ai_p, u_id, ATTR_HIT_POINTS, Operation.ADD, BALANCE["escalation_hp_add"])
+            safe_modify_attribute(t_escalate1, ai_p, u_id, ATTR_ATTACK, Operation.ADD, BALANCE["escalation_atk_add"], armor_class=4)
+            safe_modify_attribute(t_escalate1, ai_p, u_id, ATTR_ATTACK, Operation.ADD, BALANCE["escalation_atk_add"], armor_class=3)
     send_highlight_chat(
-        t_escalate, "<ORANGE>",
-        "[ESKALACJA HORDY]: Wszystkie jednostki Hordy otrzymuja trwale +25 HP oraz +2 Ataku!",
+        t_escalate1, "<ORANGE>",
+        f"[WZROST SILY HORDY]: Jednostki Hordy otrzymuja +{BALANCE['escalation_hp_add']} HP oraz +{BALANCE['escalation_atk_add']} Ataku!",
+    )
+
+    # Bieg 2 (od 45:00): dodatkowe +9 HP i +1 Ataku co 5 minut
+    t_enable_esc2 = tm.add_trigger("04c_Enable_LateGame_Escalation_At_45m", enabled=True, looping=False)
+    safe_call(t_enable_esc2.new_condition.timer, timer=BALANCE["late_escalation_start_sec"])
+
+    t_escalate2 = tm.add_trigger("04d_LateGame_Horde_Overdrive_Every_5m", enabled=False, looping=True)
+    safe_call(t_enable_esc2.new_effect.activate_trigger, trigger_id=t_escalate2.trigger_id)
+    safe_call(t_escalate2.new_condition.timer, timer=BALANCE["escalation_interval_sec"])
+    for ai_p in ai_players:
+        for u_id in all_enemy_combat_units:
+            safe_modify_attribute(t_escalate2, ai_p, u_id, ATTR_HIT_POINTS, Operation.ADD, BALANCE["late_escalation_hp_add"])
+            safe_modify_attribute(t_escalate2, ai_p, u_id, ATTR_ATTACK, Operation.ADD, 1, armor_class=4)
+            safe_modify_attribute(t_escalate2, ai_p, u_id, ATTR_ATTACK, Operation.ADD, 1, armor_class=3)
+    send_highlight_chat(
+        t_escalate2, "<RED>",
+        f"[FURIA LATE-GAME]: Horda wchodzi w faze pelnej mobilizacji (+{BALANCE['late_escalation_hp_add']} HP i +1 Ataku)!",
+    )
+
+    # Bieg 3 (od 55:00 - Endgame): dodatkowe +10 HP i +2 Ataku co 5 minut (utrzymuje wyzwanie przy 250 popu i perkach z Questów!)
+    t_enable_esc3 = tm.add_trigger("04e_Enable_Endgame_Escalation_At_55m", enabled=True, looping=False)
+    safe_call(t_enable_esc3.new_condition.timer, timer=BALANCE["endgame_escalation_start_sec"])
+
+    t_escalate3 = tm.add_trigger("04f_Endgame_Horde_Escalation_Every_5m", enabled=False, looping=True)
+    safe_call(t_enable_esc3.new_effect.activate_trigger, trigger_id=t_escalate3.trigger_id)
+    safe_call(t_escalate3.new_condition.timer, timer=BALANCE["escalation_interval_sec"])
+    for ai_p in ai_players:
+        for u_id in all_enemy_combat_units:
+            safe_modify_attribute(t_escalate3, ai_p, u_id, ATTR_HIT_POINTS, Operation.ADD, BALANCE["endgame_escalation_hp_add"])
+            safe_modify_attribute(t_escalate3, ai_p, u_id, ATTR_ATTACK, Operation.ADD, 2, armor_class=4)
+            safe_modify_attribute(t_escalate3, ai_p, u_id, ATTR_ATTACK, Operation.ADD, 2, armor_class=3)
+    send_highlight_chat(
+        t_escalate3, "<RED>",
+        f"[ESKALACJA ENDGAME]: Elitarne dywizje Hordy zyskuja kolejne +{BALANCE['endgame_escalation_hp_add']} HP i +2 Ataku!",
     )
 
     # ==============================================================================
-    # 8. HARMONOGRAM 12 ROSNĄCYCH FAL ZE STOPNIOWYM WPROWADZANIEM MUTANTÓW
-    #    - Fale 1-2 (10:00, 13:00): Armia Feudalna (Fala 1 bez mutantów, Fala 2 pojedynczy Berserkerzy/Snajperzy)
-    #    - Fale 3-6 (16:00 - 25:00): Armia Castle Age (stopniowo dochodzą Kamikaze -> Mag -> Kolos -> Tytan)
-    #    - Fale 7-12 (28:00 - 43:00+): Armia Imperialna + pełna skala wszystkich 6 klas mutantów
+    # 8. HARMONOGRAM 14 FAL (W1 BEZ TARANÓW, W2 Z TARANEM/MANGONELEM BEZ MUTANTÓW, OD W3 MUTANTY)
     # ==============================================================================
     all_settlement_wave_triggers = {
         "G1_North": [], "G1_East": [], "G2_Snipers": [], "G2_Mages": [], "G3_North": [], "G3_East": [],
     }
 
     wave_definitions = [
-        # Fala 1 (10:00) - Czysty Feudal, ZERO jednostek specjalnych
+        # Fala 1 (8:30) - Bez taranów i bez jednostek specjalnych! Wymusza zrobienie kilku jednostek, bo same wieże nie wystarczą.
         (
-            1, "Fala 1/12 (Feudalna - brak jednostek specjalnych)",
-            [(UnitInfo.MAN_AT_ARMS.ID, 6), (UnitInfo.ARCHER.ID, 6), (UnitInfo.BATTERING_RAM.ID, 1)],
+            1, 510, "Fala 1/14 (8:30 - Szturm Feudalny bez taranow)",
+            [(UnitInfo.MAN_AT_ARMS.ID, 6), (UnitInfo.ARCHER.ID, 5)],
             [(UnitInfo.MAN_AT_ARMS.ID, 6), (UnitInfo.SCOUT_CAVALRY.ID, 5)],
-            [(UnitInfo.ARCHER.ID, 6), (UnitInfo.SPEARMAN.ID, 6)],
-            [], [], [],
+            [], [], [], [], 0,
         ),
-        # Fala 2 (13:00) - Późny Feudal + pierwsi pojedynczy Berserkerzy (2) i Snajperzy (2)
+        # Fala 2 (13:00) - Z pierwszym Taranem i Mangonelem, ale nadal BEZ jednostek specjalnych!
         (
-            2, "Fala 2/12 (Feudalna + pierwsi pojedynczy Berserkerzy i Snajperzy)",
-            [(UnitInfo.MAN_AT_ARMS.ID, 8), (ELITE_BERSERK_ID, 2), (UnitInfo.BATTERING_RAM.ID, 1)],
-            [(UnitInfo.MAN_AT_ARMS.ID, 8), (UnitInfo.SCOUT_CAVALRY.ID, 6), (UnitInfo.KNIGHT.ID, 2)],
-            [(UnitInfo.ARCHER.ID, 8), (UnitInfo.ELITE_JANISSARY.ID, 2)],
-            [], [], [],
+            2, 780, "Fala 2/14 (13:00 - Feudalna z Taranem i Mangonelem, bez jednostek specjalnych)",
+            [(UnitInfo.MAN_AT_ARMS.ID, 8), (UnitInfo.ARCHER.ID, 6), (UnitInfo.BATTERING_RAM.ID, 1)],
+            [(UnitInfo.SPEARMAN.ID, 8), (UnitInfo.SCOUT_CAVALRY.ID, 6), (UnitInfo.MANGONEL.ID, 1)],
+            [], [], [], [], 0,
         ),
-        # Fala 3 (16:00) - Wczesny Castle Age + pierwsze pojedyncze jednostki Kamikaze (2 Petardy, 2 Wielbłądy)
+        # Fala 3 (18:00) - Wczesny Castle Age + debiut pierwszych jednostek specjalnych (Berserkerzy, Snajperzy, Szakale)
         (
-            3, "Fala 3/12 (Castle Age + pierwsze jednostki Kamikaze)",
-            [(UnitInfo.PIKEMAN.ID, 8), (ELITE_BERSERK_ID, 3), (PETARD_ID, 2), (UnitInfo.BATTERING_RAM.ID, 1)],
-            [(UnitInfo.HUSKARL.ID, 6), (UnitInfo.KNIGHT.ID, 4), (FLAMING_CAMEL_ID, 2)],
-            [(UnitInfo.CROSSBOWMAN.ID, 8), (UnitInfo.ELITE_JANISSARY.ID, 3)],
-            [(UnitInfo.KNIGHT.ID, 5), (UnitInfo.MISSIONARY.ID, 1)],
-            [], [],
+            3, 1080, "Fala 3/14 (18:00 - Castle Age + pierwsi Berserkerzy, Snajperzy i Szakale!)",
+            [(UnitInfo.PIKEMAN.ID, 11), (ELITE_BERSERK_ID, 3), (PETARD_ID, 1), (UnitInfo.BATTERING_RAM.ID, 1)],
+            [(UnitInfo.HUSKARL.ID, 8), (UnitInfo.KNIGHT.ID, 5), (FLAMING_CAMEL_ID, 1)],
+            [(UnitInfo.CROSSBOWMAN.ID, 10), (UnitInfo.ELITE_JANISSARY.ID, 2)],
+            [], [], [], 5,
         ),
-        # Fala 4 (19:00) - Środkowy Castle Age + debiut pierwszego Arcymaga Tarczy (1 Imam) na Bramie Centralnej
+        # Fala 4 (23:30) - Środkowy Castle Age + debiut Arcymaga Tarczy (240 HP, regen 5 HP/s, +30 Pancerza!)
         (
-            4, "Fala 4/12 (Castle Age + debiut Arcymaga Tarczy na Bramie Centralnej!)",
-            [(UnitInfo.PIKEMAN.ID, 10), (ELITE_BERSERK_ID, 4), (PETARD_ID, 2), (UnitInfo.CAPPED_RAM.ID, 1)],
-            [(UnitInfo.HUSKARL.ID, 8), (FLAMING_CAMEL_ID, 2), (UnitInfo.MANGONEL.ID, 1)],
-            [(UnitInfo.CROSSBOWMAN.ID, 10), (UnitInfo.ELITE_JANISSARY.ID, 4)],
-            [(IMAM_UNIT_ID, 1), (UnitInfo.MISSIONARY.ID, 2), (UnitInfo.KNIGHT.ID, 8), (UnitInfo.BATTERING_RAM.ID, 1)],
-            [(UnitInfo.KNIGHT.ID, 6), (UnitInfo.PIKEMAN.ID, 6)],
-            [],
+            4, 1410, "Fala 4/14 (23:30 - Castle Age + Arcymag Tarczy dajacy +30 Pancerza calej Hordzie!)",
+            [(UnitInfo.PIKEMAN.ID, 14), (ELITE_BERSERK_ID, 4), (UnitInfo.BATTERING_RAM.ID, 2)],
+            [(UnitInfo.HUSKARL.ID, 10), (UnitInfo.KNIGHT.ID, 6), (FLAMING_CAMEL_ID, 2)],
+            [(UnitInfo.CROSSBOWMAN.ID, 12), (UnitInfo.ELITE_JANISSARY.ID, 3)],
+            [(IMAM_UNIT_ID, 1), (UnitInfo.KNIGHT.ID, 10), (UnitInfo.BATTERING_RAM.ID, 2)],
+            [], [], 6,
         ),
-        # Fala 5 (22:00) - Późny Castle Age + debiut pojedynczego Kolosa Oblężniczego (1 szt.)
+        # Fala 5 (29:00) - Późny Castle Age + debiut Moździerza Oblężniczego (21 zasięgu, martwa strefa 6 kratek!)
         (
-            5, "Fala 5/12 (Castle Age + debiut pojedynczego Kolosa Oblezniczego 22 zasiegu!)",
-            [(UnitInfo.PIKEMAN.ID, 10), (ELITE_BERSERK_ID, 5), (PETARD_ID, 3), (UnitInfo.CAPPED_RAM.ID, 2)],
-            [(UnitInfo.HUSKARL.ID, 8), (FLAMING_CAMEL_ID, 3), (UnitInfo.KNIGHT.ID, 6)],
-            [(UnitInfo.CROSSBOWMAN.ID, 10), (UnitInfo.ELITE_JANISSARY.ID, 4), (SIEGE_ONAGER_ID, 1)],
-            [(IMAM_UNIT_ID, 1), (UnitInfo.MISSIONARY.ID, 2), (UnitInfo.KNIGHT.ID, 10), (UnitInfo.CAPPED_RAM.ID, 1)],
-            [(UnitInfo.KNIGHT.ID, 8), (UnitInfo.MANGONEL.ID, 1)],
-            [(UnitInfo.CROSSBOWMAN.ID, 10), (UnitInfo.KNIGHT.ID, 6)],
+            5, 1740, "Fala 5/14 (29:00 - Pozny Castle Age + Mozdzierz Oblezniczy!)",
+            [(UnitInfo.PIKEMAN.ID, 16), (ELITE_BERSERK_ID, 4), (PETARD_ID, 2), (UnitInfo.CAPPED_RAM.ID, 2)],
+            [(UnitInfo.HUSKARL.ID, 12), (FLAMING_CAMEL_ID, 2), (UnitInfo.CAPPED_RAM.ID, 2)],
+            [(UnitInfo.CROSSBOWMAN.ID, 14), (UnitInfo.ELITE_JANISSARY.ID, 3), (SIEGE_ONAGER_ID, 1)],
+            [(IMAM_UNIT_ID, 1), (UnitInfo.KNIGHT.ID, 12)],
+            [(UnitInfo.KNIGHT.ID, 8), (UnitInfo.PIKEMAN.ID, 10)],
+            [], 7,
         ),
-        # Fala 6 (25:00) - Przełom Castle/Imperial + debiut pierwszych Tytanów Hordy (2 Słonie 1400 HP)
+        # Fala 6 (34:30) - Debiut Żelaznego Słonia-Tanka (1450 HP, 3 dmg w wojsko, +220 w budynki!)
         (
-            6, "Fala 6/12 (Koniec Castle Age + debiut Tytanow Hordy 1400 HP!)",
-            [(UnitInfo.PIKEMAN.ID, 12), (ELITE_BERSERK_ID, 6), (PETARD_ID, 3), (UnitInfo.CAPPED_RAM.ID, 2)],
-            [(UnitInfo.HUSKARL.ID, 10), (FLAMING_CAMEL_ID, 3), (UnitInfo.CAPPED_RAM.ID, 2)],
-            [(UnitInfo.CROSSBOWMAN.ID, 12), (UnitInfo.ELITE_JANISSARY.ID, 5), (SIEGE_ONAGER_ID, 1)],
-            [(IMAM_UNIT_ID, 2), (UnitInfo.MISSIONARY.ID, 3), (UnitInfo.CAVALIER.ID, 10), (UnitInfo.CAPPED_RAM.ID, 2)],
-            [(ELITE_BATTLE_ELEPHANT_ID, 2), (UnitInfo.CAVALIER.ID, 8)],
-            [(ELITE_BATTLE_ELEPHANT_ID, 1), (UnitInfo.CROSSBOWMAN.ID, 12)],
+            6, 2070, "Fala 6/14 (34:30 - Debiut Zelaznego Slonia-Tanka 1450 HP!)",
+            [(UnitInfo.PIKEMAN.ID, 18), (ELITE_BERSERK_ID, 5), (UnitInfo.CAPPED_RAM.ID, 2)],
+            [(UnitInfo.HUSKARL.ID, 14), (FLAMING_CAMEL_ID, 3), (UnitInfo.CAPPED_RAM.ID, 2)],
+            [(UnitInfo.CROSSBOWMAN.ID, 16), (UnitInfo.ELITE_JANISSARY.ID, 3), (SIEGE_ONAGER_ID, 1)],
+            [(IMAM_UNIT_ID, 1), (UnitInfo.CAVALIER.ID, 12), (UnitInfo.CAPPED_RAM.ID, 2)],
+            [(ELITE_BATTLE_ELEPHANT_ID, 1), (UnitInfo.KNIGHT.ID, 10), (UnitInfo.PIKEMAN.ID, 12)],
+            [(UnitInfo.CROSSBOWMAN.ID, 14), (UnitInfo.KNIGHT.ID, 8)],
+            8,
+        ),
+        # Fala 7 (40:00) - Wczesny Imperial Age
+        (
+            7, 2400, "Fala 7/14 (40:00 - Wczesny Imperial Age)",
+            [(UnitInfo.HALBERDIER.ID, 20), (ELITE_BERSERK_ID, 5), (PETARD_ID, 3), (UnitInfo.CAPPED_RAM.ID, 3)],
+            [(UnitInfo.HUSKARL.ID, 16), (FLAMING_CAMEL_ID, 3), (UnitInfo.CAPPED_RAM.ID, 2)],
+            [(UnitInfo.ARBALESTER.ID, 18), (UnitInfo.ELITE_JANISSARY.ID, 4), (SIEGE_ONAGER_ID, 1)],
+            [(IMAM_UNIT_ID, 1), (UnitInfo.CAVALIER.ID, 14)],
+            [(ELITE_BATTLE_ELEPHANT_ID, 2), (UnitInfo.CAVALIER.ID, 12), (UnitInfo.HALBERDIER.ID, 12)],
+            [(ELITE_BATTLE_ELEPHANT_ID, 1), (UnitInfo.ARBALESTER.ID, 16)],
+            9,
+        ),
+        # Fala 8 (45:30) - Pełny Imperial Age (Skalowana pod graczy z ukończonymi Questami!)
+        (
+            8, 2730, "Fala 8/14 (45:30 - Pelny Imperial Age)",
+            [(UnitInfo.HALBERDIER.ID, 22), (ELITE_BERSERK_ID, 6), (UnitInfo.SIEGE_RAM.ID, 3)],
+            [(UnitInfo.HUSKARL.ID, 18), (FLAMING_CAMEL_ID, 3), (UnitInfo.SIEGE_RAM.ID, 3)],
+            [(UnitInfo.ARBALESTER.ID, 20), (UnitInfo.ELITE_JANISSARY.ID, 4), (SIEGE_ONAGER_ID, 2)],
+            [(IMAM_UNIT_ID, 2), (UnitInfo.CAVALIER.ID, 16), (UnitInfo.SIEGE_RAM.ID, 3)],
+            [(ELITE_BATTLE_ELEPHANT_ID, 2), (UnitInfo.CAVALIER.ID, 14), (UnitInfo.HALBERDIER.ID, 14)],
+            [(ELITE_BATTLE_ELEPHANT_ID, 2), (UnitInfo.ARBALESTER.ID, 18), (SIEGE_ONAGER_ID, 1)],
+            10,
+        ),
+        # Fala 9 (51:00) - Środkowy Imperial Age
+        (
+            9, 3060, "Fala 9/14 (51:00 - Srodkowy Imperial Age)",
+            [(UnitInfo.HALBERDIER.ID, 25), (ELITE_BERSERK_ID, 7), (PETARD_ID, 3), (UnitInfo.SIEGE_RAM.ID, 3)],
+            [(UnitInfo.HUSKARL.ID, 20), (FLAMING_CAMEL_ID, 4), (UnitInfo.SIEGE_RAM.ID, 3)],
+            [(UnitInfo.ARBALESTER.ID, 22), (UnitInfo.ELITE_JANISSARY.ID, 4), (SIEGE_ONAGER_ID, 2)],
+            [(IMAM_UNIT_ID, 2), (UnitInfo.PALADIN.ID, 16), (UnitInfo.SIEGE_RAM.ID, 3)],
+            [(ELITE_BATTLE_ELEPHANT_ID, 3), (UnitInfo.PALADIN.ID, 15), (UnitInfo.HALBERDIER.ID, 16)],
+            [(ELITE_BATTLE_ELEPHANT_ID, 2), (UnitInfo.ARBALESTER.ID, 20), (SIEGE_ONAGER_ID, 2)],
+            12,
         ),
     ]
 
-    # Fale 7-12 (28:00 - 43:00+): Pełna Era Imperialna z rosnącą liczbą wszystkich jednostek
-    for w_imp in range(7, 13):
-        m = w_imp - 6  # m = 1..6
+    # Fale 10-14 (56:30, 62:00, 67:30, 73:00, 78:30+): Potężne dywizje Late Imperial Age pod 250 popu graczy
+    for w_late in range(10, 15):
+        m = w_late - 9  # m = 1..5
+        wave_sec = 3060 + m * 330
+        minute_mark = wave_sec // 60
         wave_definitions.append((
-            w_imp,
-            f"Fala {w_imp}/12 (Era Imperialna - pelna skala Hordy!)",
-            [(UnitInfo.HALBERDIER.ID, 10 + m * 2), (ELITE_BERSERK_ID, 6 + m * 2), (PETARD_ID, 3 + m), (UnitInfo.SIEGE_RAM.ID, 2)],
-            [(UnitInfo.HUSKARL.ID, 10 + m * 2), (FLAMING_CAMEL_ID, 3 + m), (UnitInfo.SIEGE_RAM.ID, 2)],
-            [(UnitInfo.ARBALESTER.ID, 10 + m * 2), (UnitInfo.ELITE_JANISSARY.ID, 5 + m), (SIEGE_ONAGER_ID, 1 + (m // 2))],
-            [(IMAM_UNIT_ID, 2), (UnitInfo.MISSIONARY.ID, 3), (UnitInfo.CAVALIER.ID, 10 + m * 2), (UnitInfo.SIEGE_RAM.ID, 2)],
-            [(ELITE_BATTLE_ELEPHANT_ID, 2 + m), (UnitInfo.PALADIN.ID, 6 + m * 2), (UnitInfo.SIEGE_RAM.ID, 2)],
-            [(ELITE_BATTLE_ELEPHANT_ID, 2 + m), (UnitInfo.ARBALESTER.ID, 10 + m * 2), (SIEGE_ONAGER_ID, 1 + (m // 3))],
+            w_late, wave_sec,
+            f"Fala {w_late}/14 ({minute_mark}m - Late Imperial Age)",
+            [(UnitInfo.HALBERDIER.ID, 25 + m * 3), (ELITE_BERSERK_ID, 7 + m), (PETARD_ID, 3 + (m // 2)), (UnitInfo.SIEGE_RAM.ID, 4)],
+            [(UnitInfo.HUSKARL.ID, 20 + m * 3), (FLAMING_CAMEL_ID, 3 + (m // 2)), (UnitInfo.SIEGE_RAM.ID, 4)],
+            [(UnitInfo.ARBALESTER.ID, 22 + m * 3), (UnitInfo.ELITE_JANISSARY.ID, 4 + (m // 2)), (SIEGE_ONAGER_ID, 2 + (m // 3))],
+            [(IMAM_UNIT_ID, 2 + (m // 3)), (UnitInfo.PALADIN.ID, 16 + m * 3), (UnitInfo.SIEGE_RAM.ID, 4)],
+            [(ELITE_BATTLE_ELEPHANT_ID, 3 + (m // 2)), (UnitInfo.PALADIN.ID, 16 + m * 3), (UnitInfo.HALBERDIER.ID, 16 + m * 2)],
+            [(ELITE_BATTLE_ELEPHANT_ID, 3 + (m // 2)), (UnitInfo.ARBALESTER.ID, 20 + m * 3), (SIEGE_ONAGER_ID, 2 + (m // 3))],
+            12 + m,
         ))
 
-    for wave_num, wave_title, g1_n_comp, g1_e_comp, g2_s_comp, g2_m_comp, g3_n_comp, g3_e_comp in wave_definitions:
-        wave_time = BALANCE["first_wave_sec"] + (wave_num - 1) * BALANCE["wave_interval_sec"]
-        is_endless_last = wave_num == 12
+    eco_raid_targets = [
+        (32, 118),
+        (76, 120),
+        (32, 168),
+        (76, 172),
+    ]
+
+    deep_target_north = (48, 138)
+    deep_target_center = (54, 146)
+    deep_target_east = (68, 162)
+
+    total_waves = len(wave_definitions)
+    for (
+        wave_num, wave_time, wave_title,
+        g1_n_comp, g1_e_comp, g2_s_comp, g2_m_comp, g3_n_comp, g3_e_comp, raider_count,
+    ) in wave_definitions:
+        is_endless_last = wave_num == total_waves
         loop_flag = is_endless_last
         cond_time = BALANCE["wave_interval_sec"] if is_endless_last else wave_time
 
         t_ann = tm.add_trigger(f"03_W{wave_num:02d}_Announce", enabled=not is_endless_last, looping=loop_flag)
         safe_call(t_ann.new_condition.timer, timer=cond_time)
 
-        if wave_num == 1:
-            safe_call(t_ann.new_effect.activate_trigger, trigger_id=t_escalate.trigger_id)
-
         send_highlight_chat(
             t_ann, "<RED>",
-            f"=== [{wave_title}] === Po odparciu fali macie 2,5 min Okna Ekspedycyjnego na wypad w pole!",
+            f"=== [{wave_title}] === Po odparciu fali wyjdzcie w pole po Questy i Settlementy!",
             flare_x=gate_center[0], flare_y=gate_center[1],
         )
 
         per_settlement_wave = [
-            ("G1_North", PlayerId.FIVE, g1_n_comp, 48, 86, *gate_north),
-            ("G1_East",  PlayerId.FIVE, g1_e_comp, 120, 162, *gate_east),
-            ("G2_Snipers", PlayerId.SIX, g2_s_comp, 68, 48, *gate_north),
-            ("G2_Mages",   PlayerId.SEVEN, g2_m_comp, 118, 114, *gate_center),
-            ("G3_North", PlayerId.EIGHT, g3_n_comp, 128, 36, *gate_center),
-            ("G3_East",  PlayerId.EIGHT, g3_e_comp, 160, 62, *gate_east),
+            ("G1_North", PlayerId.FIVE, g1_n_comp, 48, 86, *deep_target_north),
+            ("G1_East",  PlayerId.FIVE, g1_e_comp, 120, 162, *deep_target_east),
+            ("G2_Snipers", PlayerId.SIX, g2_s_comp, 68, 48, *deep_target_north),
+            ("G2_Mages",   PlayerId.SEVEN, g2_m_comp, 116, 114, *deep_target_center),
+            ("G3_North", PlayerId.EIGHT, g3_n_comp, 128, 36, *deep_target_center),
+            ("G3_East",  PlayerId.EIGHT, g3_e_comp, 160, 62, *deep_target_east),
         ]
 
         for s_key, ai_p, comp, sx, sy, tx, ty in per_settlement_wave:
@@ -1129,7 +1386,7 @@ def build_horde_scenario():
             safe_call(t_w.new_condition.timer, timer=cond_time)
             add_spawn_and_attack_effect(t_w, ai_p, comp, spawn_x=sx, spawn_y=sy, target_x=tx, target_y=ty)
 
-            if s_key == "G2_Mages":
+            if s_key == "G2_Mages" and any(u == IMAM_UNIT_ID for u, _ in comp):
                 safe_call(t_w.new_effect.activate_trigger, trigger_id=t_shield_on.trigger_id)
 
             all_settlement_wave_triggers[s_key].append(t_w)
@@ -1141,60 +1398,133 @@ def build_horde_scenario():
                 safe_call(t_enable_endless.new_effect.activate_trigger, trigger_id=t_ann.trigger_id)
                 all_settlement_wave_triggers[s_key].append(t_enable_endless)
 
+        if raider_count > 0:
+            eco_tx, eco_ty = eco_raid_targets[wave_num % len(eco_raid_targets)]
+            t_raid = tm.add_trigger(f"03_W{wave_num:02d}_Szakale_EcoRaid", enabled=not is_endless_last, looping=loop_flag)
+            safe_call(t_raid.new_condition.timer, timer=cond_time)
+            add_spawn_and_attack_effect(
+                t_raid, PlayerId.SEVEN, [(HUSSAR_ID, raider_count)],
+                spawn_x=116, spawn_y=162 if wave_num % 2 == 0 else 114,
+                target_x=eco_tx, target_y=eco_ty,
+                ignore_frontline_move_only=True,
+            )
+            all_settlement_wave_triggers["G2_Mages"].append(t_raid)
+            if is_endless_last:
+                t_en_raid = tm.add_trigger("03_Enable_Endless_Szakale", enabled=True, looping=False)
+                safe_call(t_en_raid.new_condition.timer, timer=wave_time)
+                safe_call(t_en_raid.new_effect.activate_trigger, trigger_id=t_raid.trigger_id)
+                all_settlement_wave_triggers["G2_Mages"].append(t_en_raid)
+
     # ==============================================================================
-    # 9. LOGIKA 4 QUESTÓW (MALEJĄCE DESCRIPTION_ORDER: 100 -> 96)
+    # 9. LOGIKA 4 QUESTÓW (PERKI DLA GRACZY + ADAPTACYJNA ODPOWIEDŹ HORDY NA ROZWÓJ!)
     # ==============================================================================
     t_obj_header_q = tm.add_trigger("00_Obj_Header_Quests", enabled=True, looping=False)
     safe_call(t_obj_header_q.new_condition.timer, timer=99999)
-    set_as_objective(t_obj_header_q, "-- QUESTY POBOCZNE --", order=100, is_header=True)
+    set_as_objective(t_obj_header_q, "-- QUESTY POBOCZNE (STALE PERKI) --", order=100, is_header=True)
 
-    t_q1 = tm.add_trigger("06_Quest1_Unlock_Trade", enabled=True, looping=False)
-    set_as_objective(t_q1, "Q1 - Karawanseraj (zasoby + handel)", order=99)
+    # QUEST 1: Kamienny Mur Handlowy wzdłuż dolnej krawędzi mapy, +30 Popu, +20% szybsza praca Wieśniaków
+    t_q1 = tm.add_trigger("06_Quest1_Build_Trade_Wall_And_Pop", enabled=True, looping=False)
+    set_as_objective(t_q1, "Q1 - Karawanseraj (Mur Handlowy, +30 Pop, +20% Eko)", order=99)
     safe_call(t_q1.new_condition.destroy_object, unit_object=q1_bldg.reference_id)
-    safe_call(t_q1.new_effect.create_object, object_list_unit_id=BuildingInfo.MARKET.ID, source_player=PlayerId.TWO, location_x=152, location_y=190)
-    safe_call(t_q1.new_effect.create_object, object_list_unit_id=BuildingInfo.MARKET.ID, source_player=PlayerId.ONE, location_x=158, location_y=190)
+
+    keep_x_positions = {115, 130, 145, 160, 175, 190}
+    for wx in range(105, MAP_SIZE):
+        if wx in keep_x_positions:
+            safe_call(
+                t_q1.new_effect.create_object,
+                object_list_unit_id=BuildingInfo.KEEP.ID,
+                source_player=PlayerId.FOUR,
+                location_x=wx,
+                location_y=186,
+            )
+        safe_call(
+            t_q1.new_effect.create_object,
+            object_list_unit_id=BuildingInfo.FORTIFIED_WALL.ID,
+            source_player=PlayerId.FOUR,
+            location_x=wx,
+            location_y=184,
+        )
+
+    safe_call(t_q1.new_effect.create_object, object_list_unit_id=BuildingInfo.MARKET.ID, source_player=PlayerId.TWO, location_x=193, location_y=191)
+    safe_call(t_q1.new_effect.create_object, object_list_unit_id=BuildingInfo.MARKET.ID, source_player=PlayerId.ONE, location_x=193, location_y=196)
+
     for h_p in human_players:
-        for i in range(3):
+        add_player_resource(t_q1, h_p, RES_BONUS_POP_CAP, BALANCE["q1_bonus_pop"])
+        add_player_resource(t_q1, h_p, RES_GOLD, 500)
+        for vil_id in [UnitInfo.VILLAGER_MALE.ID, UnitInfo.VILLAGER_FEMALE.ID]:
+            safe_modify_attribute(t_q1, h_p, vil_id, ATTR_WORK_RATE, Operation.MULTIPLY, 1.20)
+        safe_modify_attribute(t_q1, h_p, UnitInfo.TRADE_CART_EMPTY.ID, ATTR_MOVEMENT_SPEED, Operation.MULTIPLY, 1.25)
+        for i in range(4):
             px, py = p_coords[h_p]
             safe_call(t_q1.new_effect.create_object, object_list_unit_id=UnitInfo.TRADE_CART_EMPTY.ID, source_player=h_p, location_x=px + i, location_y=py + 5)
-        add_player_resource(t_q1, h_p, RES_GOLD, 500)
+
+    # Adaptacja Hordy (+8 HP i +1 Ataku, by utrzymać balans przy +30 popu graczy)
+    for ai_p in ai_players:
+        for u_id in all_enemy_combat_units:
+            safe_modify_attribute(t_q1, ai_p, u_id, ATTR_HIT_POINTS, Operation.ADD, 8)
+            safe_modify_attribute(t_q1, ai_p, u_id, ATTR_ATTACK, Operation.ADD, 1, armor_class=4)
+
     send_highlight_chat(
         t_q1, "<GREEN>",
-        "=== [Q1 UKONCZONY!] === Karawanseraj zburzony! Wszyscy otrzymuja +500 Zlota, 3 Wozy Handlowe i Targowiska na poludniu!",
-        flare_x=154, flare_y=188,
+        "=== [Q1 UKONCZONY!] === Wybudowano KAMIENNY MUR HANDLOWY z Basztami az do prawej krawedzi mapy (193, 193)! Wszyscy zyskuja +30 POPU, +20% szybszych Wiesniakow i 4 Wozy Handlowe!",
+        flare_x=193, flare_y=193,
     )
 
+    # QUEST 2: Klif Artylerii (Poprawiona stała UnitInfo.HEAVY_CAVALRY_ARCHER.ID!)
     t_q2 = tm.add_trigger("06_Quest2_Sniper_Cliff_Buff", enabled=True, looping=False)
-    set_as_objective(t_q2, "Q2 - Klif Artylerii (ulepszenia + atak)", order=98)
+    set_as_objective(t_q2, "Q2 - Klif Artylerii (+2 Zasiegu, +4 Ataku, Szybkosc)", order=98)
     safe_call(t_q2.new_condition.destroy_object, unit_object=q2_bldg.reference_id)
     research_techs(t_q2, human_players, [TECH_BALLISTICS, TECH_CHEMISTRY, TECH_SIEGE_ENGINEERS, TECH_THUMB_RING])
-    buffed_units = [
-        UnitInfo.LIGHT_CAVALRY.ID, UnitInfo.KNIGHT.ID, UnitInfo.CAVALIER.ID, UnitInfo.PALADIN.ID,
-        UnitInfo.CROSSBOWMAN.ID, UnitInfo.ARBALESTER.ID, UnitInfo.CAVALRY_ARCHER.ID,
+
+    ranged_units = [
+        UnitInfo.ARCHER.ID, UnitInfo.CROSSBOWMAN.ID, UnitInfo.ARBALESTER.ID,
+        UnitInfo.SKIRMISHER.ID, UnitInfo.ELITE_SKIRMISHER.ID,
+        UnitInfo.CAVALRY_ARCHER.ID, UnitInfo.HEAVY_CAVALRY_ARCHER.ID, UnitInfo.HAND_CANNONEER.ID,
+    ]
+    cavalry_units = [
+        UnitInfo.SCOUT_CAVALRY.ID, UnitInfo.LIGHT_CAVALRY.ID, HUSSAR_ID,
+        UnitInfo.KNIGHT.ID, UnitInfo.CAVALIER.ID, UnitInfo.PALADIN.ID,
+        UnitInfo.STEPPE_LANCER.ID, UnitInfo.CAMEL_RIDER.ID,
     ]
     for h_p in human_players:
-        for u_id in buffed_units:
-            safe_modify_attribute(t_q2, h_p, u_id, ATTR_MOVEMENT_SPEED, Operation.MULTIPLY, 1.12)
-            safe_modify_attribute(t_q2, h_p, u_id, ATTR_ATTACK, Operation.ADD, 4, armor_class=4)
-            safe_modify_attribute(t_q2, h_p, u_id, ATTR_ATTACK, Operation.ADD, 4, armor_class=3)
+        for r_id in ranged_units:
+            safe_modify_attribute(t_q2, h_p, r_id, ATTR_MAXIMUM_RANGE, Operation.ADD, 2)
+            safe_modify_attribute(t_q2, h_p, r_id, ATTR_SEARCH_RADIUS, Operation.ADD, 2)
+            safe_modify_attribute(t_q2, h_p, r_id, ATTR_ATTACK, Operation.ADD, 4, armor_class=3)
+        for c_id in cavalry_units:
+            safe_modify_attribute(t_q2, h_p, c_id, ATTR_MOVEMENT_SPEED, Operation.MULTIPLY, 1.12)
+            safe_modify_attribute(t_q2, h_p, c_id, ATTR_ATTACK, Operation.ADD, 4, armor_class=4)
+
+    for ai_p in ai_players:
+        for u_id in all_enemy_combat_units:
+            safe_modify_attribute(t_q2, ai_p, u_id, ATTR_HIT_POINTS, Operation.ADD, 8)
+            safe_modify_attribute(t_q2, ai_p, u_id, ATTR_ATTACK, Operation.ADD, 1, armor_class=3)
+
     send_highlight_chat(
         t_q2, "<GREEN>",
-        "=== [Q2 UKONCZONY!] === Klif Artylerii zdobyty! Wszyscy otrzymuja Balistyke, Chemie, Siege Engineers, +4 Ataku i +12% szybkosci!",
+        "=== [Q2 UKONCZONY!] === Wszyscy otrzymuja Balistyke, Chemie, Siege Engineers, +2 Zasiegu i +4 Ataku dla strzelcow oraz +12% szybkosci i +4 Ataku dla jazdy!",
         flare_x=q2_pos[0], flare_y=q2_pos[1],
     )
 
+    # QUEST 3: Skarbiec Krasnoludów
     t_q3_unlock = tm.add_trigger("06a_Quest3_Siege_Vault_Unlock", enabled=True, looping=False)
-    set_as_objective(t_q3_unlock, "Q3 - Skarbiec (zasoby + staly dochod)", order=97)
+    set_as_objective(t_q3_unlock, "Q3 - Skarbiec (+20 Pop i Duzy Staly Dochod)", order=97)
     t_q3_trickle = tm.add_trigger("06b_Quest3_Passive_Resource_Trickle", enabled=False, looping=True)
     safe_call(t_q3_unlock.new_condition.destroy_object, unit_object=q3_bldg.reference_id)
     safe_call(t_q3_unlock.new_effect.activate_trigger, trigger_id=t_q3_trickle.trigger_id)
     for h_p in human_players:
-        add_player_resource(t_q3_unlock, h_p, RES_GOLD, 400)
-        add_player_resource(t_q3_unlock, h_p, RES_FOOD, 400)
-        add_player_resource(t_q3_unlock, h_p, RES_WOOD, 400)
+        add_player_resource(t_q3_unlock, h_p, RES_BONUS_POP_CAP, BALANCE["q3_bonus_pop"])
+        add_player_resource(t_q3_unlock, h_p, RES_GOLD, 600)
+        add_player_resource(t_q3_unlock, h_p, RES_STONE, 300)
+
+    for ai_p in ai_players:
+        for u_id in all_enemy_combat_units:
+            safe_modify_attribute(t_q3_unlock, ai_p, u_id, ATTR_HIT_POINTS, Operation.ADD, 10)
+            safe_modify_attribute(t_q3_unlock, ai_p, u_id, ATTR_ATTACK, Operation.ADD, 1, armor_class=4)
+
     send_highlight_chat(
         t_q3_unlock, "<GREEN>",
-        "=== [Q3 UKONCZONY!] === Skarbiec zdobyty! +400 surowcow od reki ORAZ staly dochod co minute dla kazdego gracza!",
+        "=== [Q3 UKONCZONY!] === Wszyscy zyskuja na stale +20 LIMITU POPULACJI oraz duzy dochod (+250 Zywn/Drewna, +200 Zlota i +40 Kamienia co minute)!",
         flare_x=q3_pos[0], flare_y=q3_pos[1],
     )
 
@@ -1204,22 +1534,40 @@ def build_horde_scenario():
         add_player_resource(t_q3_trickle, h_p, RES_FOOD, tr_res["food"])
         add_player_resource(t_q3_trickle, h_p, RES_WOOD, tr_res["wood"])
         add_player_resource(t_q3_trickle, h_p, RES_GOLD, tr_res["gold"])
+        add_player_resource(t_q3_trickle, h_p, RES_STONE, tr_res["stone"])
 
-    t_q4 = tm.add_trigger("06_Quest4_Blood_Altar_Weaken_Mages", enabled=True, looping=False)
-    set_as_objective(t_q4, "Q4 - Krwawy Oltarz (+50 HP i slabsi Magowie)", order=96)
+    # QUEST 4: Krwawy Ołtarz (Poprawiona stała UnitInfo.LONG_SWORDSMAN.ID!)
+    t_q4 = tm.add_trigger("06_Quest4_Blood_Altar_Super_Army", enabled=True, looping=False)
+    set_as_objective(t_q4, "Q4 - Krwawy Oltarz (+30% HP Armii i +40% Produkcji)", order=96)
     safe_call(t_q4.new_condition.destroy_object, unit_object=q4_bldg.reference_id)
-    safe_modify_attribute(t_q4, PlayerId.SEVEN, IMAM_UNIT_ID, ATTR_HIT_POINTS, Operation.SET, 120)
+    safe_modify_attribute(t_q4, PlayerId.SEVEN, IMAM_UNIT_ID, ATTR_HIT_POINTS, Operation.SET, 140)
+
+    infantry_units = [
+        UnitInfo.MAN_AT_ARMS.ID, UnitInfo.LONG_SWORDSMAN.ID, UnitInfo.TWO_HANDED_SWORDSMAN.ID, UnitInfo.CHAMPION.ID,
+        UnitInfo.SPEARMAN.ID, UnitInfo.PIKEMAN.ID, UnitInfo.HALBERDIER.ID,
+    ]
+    prod_buildings = [BuildingInfo.BARRACKS.ID, BuildingInfo.STABLE.ID, BuildingInfo.ARCHERY_RANGE.ID, BuildingInfo.CASTLE.ID]
     for h_p in human_players:
-        for u_id in buffed_units + [UnitInfo.PIKEMAN.ID, UnitInfo.HALBERDIER.ID]:
-            safe_modify_attribute(t_q4, h_p, u_id, ATTR_HIT_POINTS, Operation.ADD, 50)
+        for u_id in ranged_units + cavalry_units + infantry_units:
+            safe_modify_attribute(t_q4, h_p, u_id, ATTR_HIT_POINTS, Operation.MULTIPLY, 1.30)
+            safe_modify_attribute(t_q4, h_p, u_id, ATTR_ARMOR, Operation.ADD, 2, armor_class=4)
+            safe_modify_attribute(t_q4, h_p, u_id, ATTR_ARMOR, Operation.ADD, 2, armor_class=3)
+        for b_id in prod_buildings:
+            safe_modify_attribute(t_q4, h_p, b_id, ATTR_WORK_RATE, Operation.MULTIPLY, 1.40)
+
+    for ai_p in ai_players:
+        for u_id in all_enemy_combat_units:
+            safe_modify_attribute(t_q4, ai_p, u_id, ATTR_HIT_POINTS, Operation.ADD, 10)
+            safe_modify_attribute(t_q4, ai_p, u_id, ATTR_ATTACK, Operation.ADD, 1, armor_class=4)
+
     send_highlight_chat(
         t_q4, "<GREEN>",
-        "=== [Q4 UKONCZONY!] === Krwawy Oltarz zburzony! Magowie wroga traca 80% zycia, a Wasze wojska zyskuja na stale +50 Max HP!",
+        "=== [Q4 UKONCZONY!] === Wasze armie otrzymuja na stale +30% Max HP, +2/+2 Pancerza oraz +40% szybsza produkcje w budynkach wojskowych!",
         flare_x=q4_pos[0], flare_y=q4_pos[1],
     )
 
     # ==============================================================================
-    # 10. ZNISZCZENIE 6 SETTLEMENTÓW (MALEJĄCE DESCRIPTION_ORDER: 90 -> 84)
+    # 10. ZNISZCZENIE 6 SETTLEMENTÓW (+15 HP i +2 ATAKU ZA ZBURZONY OBÓZ)
     # ==============================================================================
     t_obj_header_s = tm.add_trigger("00_Obj_Header_Settlements", enabled=True, looping=False)
     safe_call(t_obj_header_s.new_condition.timer, timer=99999)
@@ -1228,10 +1576,10 @@ def build_horde_scenario():
     settlement_defs = [
         ("G1_North", s_g1_north, "G1 - Polnocny (usuwa Berserkerow i Petardy)", 89, *s_coords["G1_North"]),
         ("G1_East",  s_g1_east,  "G1 - Wschodni (usuwa Huskarlow i Wielblady)", 88, *s_coords["G1_East"]),
-        ("G2_Snipers", s_g2_snipers, "G2 - Akademia (usuwa Snajperow i Kolosy)", 87, *s_coords["G2_Snipers"]),
-        ("G2_Mages",   s_g2_mages,   "G2 - Klasztor (usuwa Magow i Szamanow)", 86, *s_coords["G2_Mages"]),
-        ("G3_North", s_g3_north, "G3 - Cytadela Pln. (usuwa Tytanow Pln.)", 85, *s_coords["G3_North"]),
-        ("G3_East",  s_g3_east,  "G3 - Cytadela Wsch. (usuwa Tytanow Wsch.)", 84, *s_coords["G3_East"]),
+        ("G2_Snipers", s_g2_snipers, "G2 - Akademia (usuwa Snajperow i Mozdzierze)", 87, *s_coords["G2_Snipers"]),
+        ("G2_Mages",   s_g2_mages,   "G2 - Klasztor (usuwa Magow i Szakale)", 86, *s_coords["G2_Mages"]),
+        ("G3_North", s_g3_north, "G3 - Cytadela Pln. (usuwa Slonie-Tanki Pln.)", 85, *s_coords["G3_North"]),
+        ("G3_East",  s_g3_east,  "G3 - Cytadela Wsch. (usuwa Slonie-Tanki Wsch.)", 84, *s_coords["G3_East"]),
     ]
 
     for s_key, core_unit, obj_label, obj_order, sx, sy in settlement_defs:
@@ -1243,24 +1591,24 @@ def build_horde_scenario():
             safe_call(t_destroy.new_effect.deactivate_trigger, trigger_id=tr_w.trigger_id)
 
         for h_p in human_players:
-            add_player_resource(t_destroy, h_p, RES_GOLD, 500)
-            add_player_resource(t_destroy, h_p, RES_FOOD, 500)
+            add_player_resource(t_destroy, h_p, RES_GOLD, 600)
+            add_player_resource(t_destroy, h_p, RES_FOOD, 600)
 
         for ai_p in ai_players:
             for u_id in all_enemy_combat_units:
-                safe_modify_attribute(t_destroy, ai_p, u_id, ATTR_HIT_POINTS, Operation.ADD, 30)
+                safe_modify_attribute(t_destroy, ai_p, u_id, ATTR_HIT_POINTS, Operation.ADD, 15)
                 safe_modify_attribute(t_destroy, ai_p, u_id, ATTR_ATTACK, Operation.ADD, 2, armor_class=4)
                 safe_modify_attribute(t_destroy, ai_p, u_id, ATTR_ATTACK, Operation.ADD, 2, armor_class=3)
 
         add_spawn_and_attack_effect(
             t_destroy, PlayerId.EIGHT,
-            [(ELITE_BATTLE_ELEPHANT_ID, 4), (UnitInfo.CAVALIER.ID, 10), (UnitInfo.HALBERDIER.ID, 12)],
-            spawn_x=118, spawn_y=114, target_x=gate_center[0], target_y=gate_center[1],
+            [(ELITE_BATTLE_ELEPHANT_ID, 1), (UnitInfo.CAVALIER.ID, 12), (UnitInfo.HALBERDIER.ID, 16)],
+            spawn_x=118, spawn_y=114, target_x=deep_target_center[0], target_y=deep_target_center[1],
         )
 
         send_highlight_chat(
             t_destroy, "<AQUA>",
-            f"=== [SETTLEMENT ZNISZCZONY: {s_key}] === Jego oddzialy znikaja z fal (+500 Zlota/Zywnosci), ALE pozostale obozy wpadaja w FURIE (+30 HP, +2 Ataku + Fala Odwetowa)!",
+            f"=== [SETTLEMENT ZNISZCZONY: {s_key}] === Jego oddzialy znikaja z fal (+600 Zlota/Zywnosci), a pozostale obozy zyskuja +15 HP i +2 Ataku!",
             flare_x=sx, flare_y=sy,
         )
 
@@ -1277,7 +1625,7 @@ def build_horde_scenario():
         safe_call(t_lose.new_effect.declare_victory, source_player=ai_p, enabled=1)
 
     scenario.write_to_file(str(OUTPUT_SCENARIO))
-    print(f"Gotowe! Scenariusz Hordy (v3.3 Ruff-clean) zapisano w: {OUTPUT_SCENARIO}")
+    print(f"Gotowe! Scenariusz Hordy (v5.2 Permanent Pinpoint Revealers & Late-Game Balance, Ruff-clean) zapisano w: {OUTPUT_SCENARIO}")
 
 
 if __name__ == "__main__":
