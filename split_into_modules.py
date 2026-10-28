@@ -1,7 +1,6 @@
 import ast
 import shutil
 import subprocess
-import sys
 import textwrap
 from pathlib import Path
 

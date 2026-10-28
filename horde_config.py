@@ -2,7 +2,6 @@ from pathlib import Path
 
 from AoE2ScenarioParser.datasets.units import UnitInfo
 
-
 TREE_OAK_ID = 349
 
 
