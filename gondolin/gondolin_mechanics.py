@@ -1,9 +1,9 @@
-"""Trigger helpers, unit stat mutations, hero auras, Iron Dragon spawners, and Closed-Loop scaling."""
+"""Trigger helpers, strict safe_call validator, unit stat/name mutations, auras, and Closed-Loop scaling."""
 
 from __future__ import annotations
 
-import inspect
 from collections.abc import Callable
+import inspect
 from typing import Any
 
 from AoE2ScenarioParser.datasets.players import PlayerId
@@ -70,6 +70,7 @@ from gondolin_config import (
     TECH_SQUIRES,
     UNIT_ARCH_LONGBOW_ID,
     UNIT_ARCH_RATTAN_ID,
+    UNIT_DISPLAY_NAMES,
     UNIT_FLOWER_BLADE_ID,
     UNIT_FLOWER_CAV_ID,
     UNIT_FOUNTAIN_GUARD_ID,
@@ -108,10 +109,40 @@ HERO_RANGED_IDS: set[int] = {
 
 
 def safe_call(func: Callable[..., Any], **kwargs: Any) -> Any:
-    """Invoke AoE2ScenarioParser condition/effect methods filtering only supported parameters."""
+    """Invoke AoE2ScenarioParser condition/effect methods and raise ValueError on any unsupported argument."""
     sig = inspect.signature(func)
-    valid_kwargs = {k: v for k, v in kwargs.items() if k in sig.parameters}
-    return func(**valid_kwargs)
+    has_var_kw = any(
+        p.kind == inspect.Parameter.VAR_KEYWORD for p in sig.parameters.values()
+    )
+    if not has_var_kw:
+        unsupported = sorted(set(kwargs.keys()) - set(sig.parameters.keys()))
+        if unsupported:
+            valid = sorted(sig.parameters.keys())
+            func_name = getattr(func, "__qualname__", getattr(func, "__name__", str(func)))
+            msg = (
+                f"[BLAD KRYTYCZNY API] Funkcja '{func_name}' otrzymala nieobslugiwane argumenty: "
+                f"{unsupported}. Dozwolone parametry w tej wersji AoE2ScenarioParser: {valid}"
+            )
+            raise ValueError(msg)
+    return func(**kwargs)
+
+
+def apply_unit_lore_name(
+    trig: Any,
+    player: PlayerId,
+    unit_id: int,
+    custom_name: str | None = None,
+) -> None:
+    """Apply canonical Silmarillion Polish name to all units of unit_id owned by player."""
+    label = custom_name or UNIT_DISPLAY_NAMES.get(unit_id)
+    if not label:
+        return
+    safe_call(
+        trig.new_effect.change_object_name,
+        source_player=player,
+        object_list_unit_id=unit_id,
+        message=label,
+    )
 
 
 def add_chat_and_flare(
@@ -230,7 +261,7 @@ def create_escalating_encounter(
     elite_spawns: list[tuple[PlayerId, int, int, int, int]],
     arm_at_start: bool = True,
 ) -> tuple[Any, Any]:
-    """Create a 2-stage Closed-Loop encounter: 65% Base Wave + conditional 35% Elite Ambush after 20s."""
+    """Create a 2-stage Closed-Loop encounter: 65% Base Wave + 35% Elite Ambush + Victory Reward Trigger."""
     x1, y1, x2, y2 = sector
     tx, ty = target_xy
 
@@ -239,6 +270,7 @@ def create_escalating_encounter(
         enabled=arm_at_start,
         looping=False,
     )
+    # Require at least 2 P1 objects in area (so a lone Map Revealer cannot trip the ambush)
     safe_call(
         t_base.new_condition.objects_in_area,
         source_player=PlayerId.ONE,
@@ -246,10 +278,12 @@ def create_escalating_encounter(
         area_y1=y1,
         area_x2=x2,
         area_y2=y2,
-        quantity=1,
+        quantity=2,
     )
 
+    spawned_types_base: set[tuple[PlayerId, int]] = set()
     for ai_p, unit_id, count, sx, sy in base_spawns:
+        spawned_types_base.add((ai_p, unit_id))
         for i in range(count):
             ox = sx + (i % 4) - 1
             oy = sy + (i // 4) - 1
@@ -271,6 +305,8 @@ def create_escalating_encounter(
             location_x=tx,
             location_y=ty,
         )
+    for ai_p, unit_id in spawned_types_base:
+        apply_unit_lore_name(t_base, ai_p, unit_id)
 
     t_elite = tm.add_trigger(
         name=f"Enc_{name_prefix}_EliteAmbush",
@@ -282,6 +318,8 @@ def create_escalating_encounter(
         trigger_id=t_elite.trigger_id,
     )
 
+    # Mid-Encounter Escalation check after 20 seconds:
+    # Fires only if players still have a strong force in the sector (>= 8 units)
     safe_call(
         t_elite.new_condition.timer,
         timer=BALANCE["mid_encounter_escalation_delay"],
@@ -296,7 +334,9 @@ def create_escalating_encounter(
         quantity=8,
     )
 
+    spawned_types_elite: set[tuple[PlayerId, int]] = set()
     for ai_p, unit_id, count, sx, sy in elite_spawns:
+        spawned_types_elite.add((ai_p, unit_id))
         for i in range(count):
             ox = sx + (i % 4) - 1
             oy = sy + (i // 4) - 1
@@ -318,12 +358,49 @@ def create_escalating_encounter(
             location_x=tx,
             location_y=ty,
         )
+    for ai_p, unit_id in spawned_types_elite:
+        apply_unit_lore_name(t_elite, ai_p, unit_id)
 
-    award_glory_gold(
+    add_chat_and_flare(
         t_elite,
-        BALANCE["glory_scores"]["elite_ambush_defeated"],
-        f"<ORANGE>[Zasadzka Elitarna] Odwod Angbandu uderza w sektorze {name_prefix}! (+200 Chwaly)",
+        f"<ORANGE>[Zasadzka Elitarna] Odwod Angbandu uderza w sektorze {name_prefix}! Pokonajcie ich, aby zdobyc +200 Chwaly!",
+        tx,
+        ty,
     )
+
+    # Separate trigger that awards Glory Gold ONLY AFTER the elite ambush units in the sector are defeated
+    t_elite_reward = tm.add_trigger(
+        name=f"Enc_{name_prefix}_EliteDefeatedReward",
+        enabled=False,
+        looping=False,
+    )
+    safe_call(
+        t_elite.new_effect.activate_trigger,
+        trigger_id=t_elite_reward.trigger_id,
+    )
+    safe_call(t_elite_reward.new_condition.timer, timer=12)
+    rx1 = max(0, min(x1, tx) - 12)
+    ry1 = max(0, min(y1, ty) - 12)
+    rx2 = min(239, max(x2, tx) + 12)
+    ry2 = min(239, max(y2, ty) + 12)
+    for ai_p, unit_id in sorted(spawned_types_elite, key=lambda item: (item[0].value, item[1])):
+        safe_call(
+            t_elite_reward.new_condition.objects_in_area,
+            source_player=ai_p,
+            object_list=unit_id,
+            area_x1=rx1,
+            area_y1=ry1,
+            area_x2=rx2,
+            area_y2=ry2,
+            quantity=1,
+            inverted=1,
+        )
+    award_glory_gold(
+        t_elite_reward,
+        BALANCE["glory_scores"]["elite_ambush_defeated"],
+        f"<GREEN>[Zasadzka Elitarna Rozbita!] Odwod wroga w sektorze {name_prefix} zostal pokonany (+200 Chwaly)!",
+    )
+
     return t_base, t_elite
 
 
@@ -331,8 +408,9 @@ def grant_soft_cap_reinforcements(
     tm: Any,
     phase_name: str,
     checkpoint_map: dict[PlayerId, tuple[int, int]],
+    bldg_offsets: dict[PlayerId, int] | None = None,
 ) -> list[Any]:
-    """Create triggers that evaluate each player's army size (<15, 15..28, >28) and balance reinforcements."""
+    """Evaluate each player's living mobile army (<15, 15..28, >28) with mutually exclusive thresholds."""
     created_triggers: list[Any] = []
     primary_unit_by_player: dict[PlayerId, int] = {
         PlayerId.ONE: UNIT_HAMMER_SMITH_ID,
@@ -347,11 +425,16 @@ def grant_soft_cap_reinforcements(
         PlayerId.FOUR: UNIT_TREE_SLINGER_ID,
     }
 
+    crit_thresh = BALANCE["soft_cap_critical_threshold"]  # 15
+    dom_thresh = BALANCE["soft_cap_dominance_threshold"]  # 28
+
     for p_id in HUMAN_PLAYERS:
         cx, cy = checkpoint_map[p_id]
         u_main = primary_unit_by_player[p_id]
         u_sec = secondary_unit_by_player[p_id]
+        offset = (bldg_offsets or {}).get(p_id, 0)
 
+        # 1. Critical Rescue Pack: strictly fewer than 15 mobile units (<= 14 + offset)
         t_crit = tm.add_trigger(
             name=f"SoftCap_{phase_name}_P{p_id.value}_Critical",
             enabled=False,
@@ -360,7 +443,7 @@ def grant_soft_cap_reinforcements(
         safe_call(
             t_crit.new_condition.own_fewer_objects,
             source_player=p_id,
-            quantity=BALANCE["soft_cap_critical_threshold"],
+            quantity=(crit_thresh - 1) + offset,
         )
         for i in range(8):
             safe_call(
@@ -378,6 +461,8 @@ def grant_soft_cap_reinforcements(
                 location_x=cx + (i % 3) - 1,
                 location_y=cy + 2 + (i // 3),
             )
+        apply_unit_lore_name(t_crit, p_id, u_main)
+        apply_unit_lore_name(t_crit, p_id, u_sec)
         safe_call(
             t_crit.new_effect.send_chat,
             source_player=p_id,
@@ -385,6 +470,7 @@ def grant_soft_cap_reinforcements(
         )
         created_triggers.append(t_crit)
 
+        # 2. Standard Reserve Pack: 15..28 mobile units (>= 15 + offset AND <= 28 + offset)
         t_std = tm.add_trigger(
             name=f"SoftCap_{phase_name}_P{p_id.value}_Standard",
             enabled=False,
@@ -393,7 +479,12 @@ def grant_soft_cap_reinforcements(
         safe_call(
             t_std.new_condition.own_objects,
             source_player=p_id,
-            quantity=BALANCE["soft_cap_critical_threshold"],
+            quantity=crit_thresh + offset,
+        )
+        safe_call(
+            t_std.new_condition.own_fewer_objects,
+            source_player=p_id,
+            quantity=dom_thresh + offset,
         )
         for i in range(4):
             safe_call(
@@ -411,8 +502,11 @@ def grant_soft_cap_reinforcements(
                 location_x=cx + i - 1,
                 location_y=cy + 2,
             )
+        apply_unit_lore_name(t_std, p_id, u_main)
+        apply_unit_lore_name(t_std, p_id, u_sec)
         created_triggers.append(t_std)
 
+        # 3. Dominance Bonus: strictly more than 28 mobile units (>= 29 + offset)
         t_dom = tm.add_trigger(
             name=f"SoftCap_{phase_name}_P{p_id.value}_Dominance",
             enabled=False,
@@ -421,7 +515,7 @@ def grant_soft_cap_reinforcements(
         safe_call(
             t_dom.new_condition.own_objects,
             source_player=p_id,
-            quantity=BALANCE["soft_cap_dominance_threshold"],
+            quantity=(dom_thresh + 1) + offset,
         )
         award_glory_gold(
             t_dom,
@@ -443,7 +537,7 @@ def grant_soft_cap_reinforcements(
 
 
 def _setup_t_init_and_unit_scaling(tm: Any, ctx: dict[str, Any]) -> None:
-    """Rule 5.2: Research ages/techs at 0:01, then apply all RPG unit/hero stat mutations at 0:03."""
+    """Rule 5.2: Research ages/techs and apply lore names at 0:01, then apply RPG stat mutations at 0:03."""
     t_init_techs = tm.add_trigger(
         name="Init_01s_Techs_And_Names",
         enabled=True,
@@ -512,6 +606,7 @@ def _setup_t_init_and_unit_scaling(tm: Any, ctx: dict[str, Any]) -> None:
                 operation=Operation.SET,
             )
 
+    # Rename key Gondolin landmarks
     bldg_names: dict[str, str] = {
         "tower_of_turgon": "Wieza Krola Turgona (Amon Gwareth)",
         "royal_fountain_bldg": "Fontanna Krolewska Ectheliona",
@@ -542,6 +637,12 @@ def _setup_t_init_and_unit_scaling(tm: Any, ctx: dict[str, Any]) -> None:
                 message=label,
             )
 
+    # Apply Silmarillion lore names to all initial Heroes, Noldor Retinues, Refugees, and Enemy Forces
+    for u_id in UNIT_DISPLAY_NAMES:
+        for p_id in HUMAN_PLAYERS + AI_PLAYERS + [PlayerId.GAIA]:
+            apply_unit_lore_name(t_init_techs, p_id, u_id)
+
+    # Trigger at 0:03: Apply Noldor Elite Retinue, Hero, and Boss stat mutations
     t_init_stats = tm.add_trigger(
         name="Init_03s_RPG_Unit_And_Hero_Stats",
         enabled=True,
@@ -939,20 +1040,15 @@ def _setup_iron_dragon_corridor_spawners(tm: Any, ctx: dict[str, Any]) -> None:
             location_x=tx,
             location_y=ty,
         )
+    apply_unit_lore_name(t_spawn_dragons, PlayerId.SIX, ENEMY_IRON_DRAGON_RAM_ID)
+    apply_unit_lore_name(t_spawn_dragons, PlayerId.SIX, ENEMY_FIRE_DRAKE_ID)
 
-    for p_id in HUMAN_PLAYERS:
-        safe_call(
-            t_spawn_dragons.new_effect.send_chat,
-            source_player=p_id,
-            message="<ORANGE>[Zelazne Smoki Morgotha] Pancerne machiny P6 wtoczyly sie w Aleje Polnocna i Wschodnia! Zniszczcie je, aby zatrzymac zrzuty Orkow!",
-        )
-        safe_call(
-            t_spawn_dragons.new_effect.create_object,
-            source_player=p_id,
-            object_list_unit_id=FLARE_UNIT_ID,
-            location_x=61,
-            location_y=106,
-        )
+    add_chat_and_flare(
+        t_spawn_dragons,
+        "<ORANGE>[Zelazne Smoki Morgotha] Pancerne machiny P6 wtoczyly sie w Aleje Polnocna i Wschodnia! Zniszczcie je, aby zatrzymac zrzuty Orkow!",
+        61,
+        106,
+    )
 
     corridors = ctx["dragon_corridors"]
     for ave_name, zones in corridors.items():
@@ -997,6 +1093,8 @@ def _setup_iron_dragon_corridor_spawners(tm: Any, ctx: dict[str, Any]) -> None:
                     location_x=cx - i,
                     location_y=cy - 1,
                 )
+            for u_id in (ENEMY_ORC_INFANTRY_ID, ENEMY_ORC_BRUTE_ID, ENEMY_ORC_CROSSBOW_ID):
+                apply_unit_lore_name(t_drop, PlayerId.FIVE, u_id)
             safe_call(
                 t_drop.new_effect.attack_move,
                 source_player=PlayerId.FIVE,

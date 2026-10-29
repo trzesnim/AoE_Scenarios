@@ -71,6 +71,8 @@ SEA_ROCKS_ID: int = 389
 FIRE_TOWER_ID: int = 190
 FLAME_EFFECT_ID: int = 303
 TORCH_ID: int = 499
+STATUE_ID: int = 817
+FLAG_A_ID: int = 600
 OAK_TREE_ID: int = 349
 PINE_TREE_ID: int = 350
 CYPRESS_TREE_ID: int = 1347
@@ -81,7 +83,7 @@ FALCON_ID: int = 96
 MACAW_ID: int = 816
 VULTURE_ID: int = 1305
 
-# Safe Building IDs (No MONUMENT=596 or WONDER=276)
+# Safe Building IDs (Strictly no MONUMENT=596 or WONDER=276)
 FEITORIA_ID: int = 1021
 KREPOST_ID: int = 1251
 CASTLE_ID: int = 82
@@ -98,6 +100,9 @@ ARCHERY_RANGE_ID: int = 87
 STABLE_ID: int = 101
 SIEGE_WORKSHOP_ID: int = 49
 HOUSE_ID: int = 70
+MILL_ID: int = 68
+LUMBER_CAMP_ID: int = 562
+MINING_CAMP_ID: int = 584
 PAVILION_ID: int = 626
 FORTIFIED_WALL_ID: int = 155
 CITY_GATE_SW_NE_ID: int = 64
@@ -115,7 +120,7 @@ HERO_GLORFINDEL_ID: int = 172  # La Hire / Golden-haired Lord with broadsword
 HERO_DUILIN_ID: int = 428  # Hrolf the Ganger / Swallow Sniper Captain
 HERO_IDRIL_ID: int = 1292  # Queen (Idril Celebrindal)
 HERO_GALDOR_ID: int = 636  # Guy Josselyne / Tall Lord of the Tree
-HERO_EARENDIL_ID: int = 831  # Royal Heir / Young Earendil (VIP ward)
+HERO_EARENDIL_ID: int = 430  # Joan the Maid (Foot noble ward - replaces invalid 831 Turtle Ship!)
 HERO_SALGANT_ID: int = 642  # William the Conqueror (Mounted Lord of the Harp)
 SANCTUARY_KING_ID: int = 434  # King unit isolated inside the Balance Sanctuary
 
@@ -163,6 +168,51 @@ ENEMY_GOTHMOG_ID: int = 1713  # Savar / High Lord of Balrogs
 ENEMY_MOLE_TRAITOR_ID: int = 878  # Elite Boyar (heavy dark armor with pick/axe)
 ENEMY_MOLE_PIKE_ID: int = 532  # Elite Teutonic Knight (Maeglin's Royal Guard)
 ENEMY_MAEGLIN_ID: int = 640  # Mordred / Traitor Prince of the Mole
+
+# Canonical lore unit names for P1-P8 (applied to initial & dynamically spawned units)
+UNIT_DISPLAY_NAMES: dict[int, str] = {
+    HERO_TUOR_ID: "Tuor (Pan Domu Skrzydla)",
+    HERO_ROG_ID: "Rog (Wodz Domu Mlota Gniewu)",
+    HERO_ECTHELION_ID: "Ecthelion (Pan Domu Zrodla)",
+    HERO_EGALMOTH_ID: "Egalmoth (Pan Niebianskiego Luku)",
+    HERO_GLORFINDEL_ID: "Glorfindel (Pan Zlotego Kwiatu)",
+    HERO_DUILIN_ID: "Duilin (Wodz Domu Jaskolki)",
+    HERO_IDRIL_ID: "Idril Celebrindal (Krolewna Gondolinu)",
+    HERO_GALDOR_ID: "Galdor (Pan Domu Drzewa)",
+    HERO_EARENDIL_ID: "Earendil (Dziedzic Gondolinu)",
+    SANCTUARY_KING_ID: "Powiernik Sanktuarium Balansu",
+    UNIT_HAMMER_SMITH_ID: "Kowal Mlota Gniewu",
+    UNIT_WING_GUARD_ID: "Topornik Domu Skrzydla",
+    UNIT_WING_CHAMPION_ID: "Miecznik Domu Skrzydla",
+    UNIT_FOUNTAIN_GUARD_ID: "Srebrny Gwardzista Zrodla",
+    UNIT_FOUNTAIN_HALB_ID: "Halabardnik Wielkiego Targu",
+    UNIT_ARCH_LONGBOW_ID: "Lucznik Niebianskiego Luku",
+    UNIT_ARCH_RATTAN_ID: "Strzelec Klejnotow Egalmotha",
+    UNIT_FLOWER_BLADE_ID: "Wojownik Zlotego Kwiatu",
+    UNIT_FLOWER_CAV_ID: "Jezdziec Domu Harfy",
+    UNIT_SWALLOW_SNIPER_ID: "Strzelec Wyborowy Jaskolki",
+    UNIT_HARP_HEALER_ID: "Uzdrowiciel Domu Harfy",
+    UNIT_TREE_PIKE_ID: "Wlocznik Domu Drzewa",
+    UNIT_TREE_SLINGER_ID: "Procarz Domu Drzewa",
+    UNIT_IDRIL_SAPPER_ID: "Saper Tajemnej Sciezki",
+    UNIT_REFUGEE_CART_ID: "Woz z Mithrilem z Kuzni Roga",
+    UNIT_REFUGEE_CIV_ID: "Uchodzca z Gondolinu",
+    UNIT_EAGLE_VANGUARD_ID: "Szpon Thorondora (Straz Orlow)",
+    ENEMY_ORC_INFANTRY_ID: "Ork z Angbandu",
+    ENEMY_ORC_BRUTE_ID: "Ciezki Uruk Morgotha",
+    ENEMY_ORC_ARCHER_ID: "Lucznik Orkow",
+    ENEMY_ORC_CROSSBOW_ID: "Kusznik z Angbandu",
+    ENEMY_DIRE_WOLF_ID: "Wilk z Thangorodrimu",
+    ENEMY_WARG_RIDER_ID: "Jezdziec Wargow",
+    ENEMY_IRON_DRAGON_RAM_ID: "Zelazny Smok Morgotha",
+    ENEMY_FIRE_DRAKE_ID: "Uruloki (Smok Ognisty)",
+    ENEMY_HEAVY_SCORPION_ID: "Balista Oblężnicza Angbandu",
+    ENEMY_BALROG_BOSS_ID: "Balrog z Angbandu",
+    ENEMY_GOTHMOG_ID: "Gothmog (Wladca Balrogow)",
+    ENEMY_MOLE_TRAITOR_ID: "Gwardzista Domu Kreta (Zdrajca)",
+    ENEMY_MOLE_PIKE_ID: "Pikinier Maeglina (Dom Kreta)",
+    ENEMY_MAEGLIN_ID: "Maeglin Zdrajca (Ksiaze Domu Kreta)",
+}
 
 # Lists for safe uint8 modify_attribute (Rule 6: strictly separate melee class 4 and ranged class 3)
 ENEMY_MELEE_UNITS: list[int] = [
@@ -245,7 +295,7 @@ BALANCE: dict[str, Any] = {
     },
     "heroes": {
         HERO_TUOR_ID: {
-            "name": "Tuor (Dom Skrzydla)",
+            "name": "Tuor (Pan Domu Skrzydla)",
             "player": PlayerId.ONE,
             "hp": 1350,
             "atk": 38,
@@ -255,7 +305,7 @@ BALANCE: dict[str, Any] = {
             "blast": 0.5,
         },
         HERO_ROG_ID: {
-            "name": "Rog (Dom Mlota Gniewu)",
+            "name": "Rog (Wodz Domu Mlota Gniewu)",
             "player": PlayerId.ONE,
             "hp": 1450,
             "atk": 44,
@@ -265,7 +315,7 @@ BALANCE: dict[str, Any] = {
             "blast": 0.6,
         },
         HERO_ECTHELION_ID: {
-            "name": "Ecthelion (Dom Zrodla)",
+            "name": "Ecthelion (Pan Domu Zrodla)",
             "player": PlayerId.TWO,
             "hp": 1300,
             "atk": 36,
@@ -275,7 +325,7 @@ BALANCE: dict[str, Any] = {
             "blast": 0.4,
         },
         HERO_EGALMOTH_ID: {
-            "name": "Egalmoth (Dom Niebianskiego Luku)",
+            "name": "Egalmoth (Pan Niebianskiego Luku)",
             "player": PlayerId.TWO,
             "hp": 1050,
             "atk": 30,
@@ -285,7 +335,7 @@ BALANCE: dict[str, Any] = {
             "blast": 0.0,
         },
         HERO_GLORFINDEL_ID: {
-            "name": "Glorfindel (Dom Zlotego Kwiatu)",
+            "name": "Glorfindel (Pan Zlotego Kwiatu)",
             "player": PlayerId.THREE,
             "hp": 1350,
             "atk": 42,
@@ -295,7 +345,7 @@ BALANCE: dict[str, Any] = {
             "blast": 0.5,
         },
         HERO_DUILIN_ID: {
-            "name": "Duilin (Dom Jaskolki)",
+            "name": "Duilin (Wodz Domu Jaskolki)",
             "player": PlayerId.THREE,
             "hp": 980,
             "atk": 34,
@@ -305,7 +355,7 @@ BALANCE: dict[str, Any] = {
             "blast": 0.0,
         },
         HERO_IDRIL_ID: {
-            "name": "Idril Celebrindal (Gwiazda Gondolinu)",
+            "name": "Idril Celebrindal (Krolewna Gondolinu)",
             "player": PlayerId.FOUR,
             "hp": 1150,
             "atk": 28,
@@ -315,7 +365,7 @@ BALANCE: dict[str, Any] = {
             "blast": 0.0,
         },
         HERO_GALDOR_ID: {
-            "name": "Galdor (Dom Drzewa)",
+            "name": "Galdor (Pan Domu Drzewa)",
             "player": PlayerId.FOUR,
             "hp": 1350,
             "atk": 35,
@@ -325,7 +375,7 @@ BALANCE: dict[str, Any] = {
             "blast": 0.4,
         },
         HERO_EARENDIL_ID: {
-            "name": "Maly Earendil (Dziedzic)",
+            "name": "Earendil (Dziedzic Gondolinu)",
             "player": PlayerId.FOUR,
             "hp": 650,
             "atk": 5,
@@ -337,7 +387,7 @@ BALANCE: dict[str, Any] = {
     },
     "bosses": {
         ENEMY_MAEGLIN_ID: {
-            "name": "Maeglin Zdrajca (Dom Kreta)",
+            "name": "Maeglin Zdrajca (Ksiaze Domu Kreta)",
             "hp": 2200,
             "atk": 32,
             "melee_armor": 6,
