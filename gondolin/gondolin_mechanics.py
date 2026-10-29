@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
 import inspect
+from collections.abc import Callable
 from typing import Any
 
 from AoE2ScenarioParser.datasets.players import PlayerId
@@ -120,7 +120,7 @@ def add_chat_and_flare(
     flare_x: int | None = None,
     flare_y: int | None = None,
 ) -> None:
-    """Send a colored chat message to all human players and optionally place a minimap flare."""
+    """Send a colored chat message to all human players and spawn a mini-map flare unit."""
     for p_id in HUMAN_PLAYERS:
         safe_call(
             trig.new_effect.send_chat,
@@ -129,12 +129,6 @@ def add_chat_and_flare(
         )
     if flare_x is not None and flare_y is not None:
         for p_id in HUMAN_PLAYERS:
-            safe_call(
-                trig.new_effect.flare,
-                source_player=p_id,
-                location_x=flare_x,
-                location_y=flare_y,
-            )
             safe_call(
                 trig.new_effect.create_object,
                 source_player=p_id,
@@ -288,8 +282,6 @@ def create_escalating_encounter(
         trigger_id=t_elite.trigger_id,
     )
 
-    # Mid-Encounter Escalation check after 20 seconds:
-    # Only fires if players still have a strong force in the sector (>= 8 units)
     safe_call(
         t_elite.new_condition.timer,
         timer=BALANCE["mid_encounter_escalation_delay"],
@@ -360,7 +352,6 @@ def grant_soft_cap_reinforcements(
         u_main = primary_unit_by_player[p_id]
         u_sec = secondary_unit_by_player[p_id]
 
-        # 1. Critical Rescue Pack (< 15 units owned)
         t_crit = tm.add_trigger(
             name=f"SoftCap_{phase_name}_P{p_id.value}_Critical",
             enabled=False,
@@ -394,7 +385,6 @@ def grant_soft_cap_reinforcements(
         )
         created_triggers.append(t_crit)
 
-        # 2. Standard Reserve Pack (>= 15 units)
         t_std = tm.add_trigger(
             name=f"SoftCap_{phase_name}_P{p_id.value}_Standard",
             enabled=False,
@@ -423,7 +413,6 @@ def grant_soft_cap_reinforcements(
             )
         created_triggers.append(t_std)
 
-        # 3. Dominance Bonus (> 28 units -> Glory Gold + HP boost instead of unit clutter)
         t_dom = tm.add_trigger(
             name=f"SoftCap_{phase_name}_P{p_id.value}_Dominance",
             enabled=False,
@@ -455,7 +444,6 @@ def grant_soft_cap_reinforcements(
 
 def _setup_t_init_and_unit_scaling(tm: Any, ctx: dict[str, Any]) -> None:
     """Rule 5.2: Research ages/techs at 0:01, then apply all RPG unit/hero stat mutations at 0:03."""
-    # 1. Trigger at 0:01: Cartography, Imperial Age, Techs, Resources, and Building Names
     t_init_techs = tm.add_trigger(
         name="Init_01s_Techs_And_Names",
         enabled=True,
@@ -500,7 +488,6 @@ def _setup_t_init_and_unit_scaling(tm: Any, ctx: dict[str, Any]) -> None:
                 source_player=p_id,
                 technology=tech_id,
             )
-        # Grant +150 Bonus Population Cap (Resource 32)
         safe_call(
             t_init_techs.new_effect.modify_resource,
             source_player=p_id,
@@ -516,7 +503,6 @@ def _setup_t_init_and_unit_scaling(tm: Any, ctx: dict[str, Any]) -> None:
                 source_player=ai_p,
                 technology=tech_id,
             )
-        # Rule 11.1: Zero starting resources for AI
         for res_id in (RES_FOOD, RES_WOOD, RES_STONE, RES_GOLD):
             safe_call(
                 t_init_techs.new_effect.modify_resource,
@@ -526,7 +512,6 @@ def _setup_t_init_and_unit_scaling(tm: Any, ctx: dict[str, Any]) -> None:
                 operation=Operation.SET,
             )
 
-    # Rename key Gondolin landmarks
     bldg_names: dict[str, str] = {
         "tower_of_turgon": "Wieza Krola Turgona (Amon Gwareth)",
         "royal_fountain_bldg": "Fontanna Krolewska Ectheliona",
@@ -557,7 +542,6 @@ def _setup_t_init_and_unit_scaling(tm: Any, ctx: dict[str, Any]) -> None:
                 message=label,
             )
 
-    # 2. Trigger at 0:03: Apply Noldor Elite Retinue, Hero, and Boss stat mutations
     t_init_stats = tm.add_trigger(
         name="Init_03s_RPG_Unit_And_Hero_Stats",
         enabled=True,
@@ -565,8 +549,6 @@ def _setup_t_init_and_unit_scaling(tm: Any, ctx: dict[str, Any]) -> None:
     )
     safe_call(t_init_stats.new_condition.timer, timer=3)
 
-    # 2A. Buff Noldor Elite Retinue above standard AoE2 base units!
-    # Every Noldor soldier gets +85 HP, +6 Attack, +2/+2 Armor, and 30 HP/min (0.5 HP/s) regeneration.
     for p_id in HUMAN_PLAYERS:
         for u_id in PLAYER_MELEE_RETINUE + PLAYER_RANGED_RETINUE:
             safe_call(
@@ -642,7 +624,6 @@ def _setup_t_init_and_unit_scaling(tm: Any, ctx: dict[str, Any]) -> None:
                 quantity=2,
             )
 
-        # Sapper Petards (P4): boost HP so they don't die to stray arrows before reaching targets
         safe_call(
             t_init_stats.new_effect.modify_attribute,
             source_player=p_id,
@@ -652,7 +633,6 @@ def _setup_t_init_and_unit_scaling(tm: Any, ctx: dict[str, Any]) -> None:
             quantity=240,
         )
 
-    # 2B. Configure Noldor Heroes (1050-1450 HP, 2.0 HP/s regen, Hero Glow, Splash Damage)
     for h_id, h_cfg in BALANCE["heroes"].items():
         p_id = h_cfg["player"]
         atk_class = ARMOR_CLASS_PIERCE if h_id in HERO_RANGED_IDS else ARMOR_CLASS_MELEE
@@ -726,9 +706,7 @@ def _setup_t_init_and_unit_scaling(tm: Any, ctx: dict[str, Any]) -> None:
                 quantity=h_cfg["blast"],
             )
 
-    # 2C. Configure Enemy Forces & Bosses (Angband Orcs, Iron Dragons, Balrogs, Gothmog, Maeglin)
     for ai_p in AI_PLAYERS:
-        # Swarming Orcs (P5): 95 HP, 15 Attack
         safe_call(
             t_init_stats.new_effect.modify_attribute,
             source_player=ai_p,
@@ -746,7 +724,6 @@ def _setup_t_init_and_unit_scaling(tm: Any, ctx: dict[str, Any]) -> None:
             armour_attack_class=ARMOR_CLASS_MELEE,
             armour_attack_quantity=15,
         )
-        # Uruk Heavy Brutes (P5): 185 HP, 22 Attack
         safe_call(
             t_init_stats.new_effect.modify_attribute,
             source_player=ai_p,
@@ -764,7 +741,6 @@ def _setup_t_init_and_unit_scaling(tm: Any, ctx: dict[str, Any]) -> None:
             armour_attack_class=ARMOR_CLASS_MELEE,
             armour_attack_quantity=22,
         )
-        # Maeglin's Mole Guard (P8): 240 HP, 26 Attack
         for mole_id in (ENEMY_MOLE_TRAITOR_ID, ENEMY_MOLE_PIKE_ID):
             safe_call(
                 t_init_stats.new_effect.modify_attribute,
@@ -784,9 +760,10 @@ def _setup_t_init_and_unit_scaling(tm: Any, ctx: dict[str, Any]) -> None:
                 armour_attack_quantity=26,
             )
 
-    # Configure Bosses from BALANCE["bosses"]
     for b_id, b_cfg in BALANCE["bosses"].items():
-        atk_cls = ARMOR_CLASS_PIERCE if b_id == ENEMY_FIRE_DRAKE_ID else ARMOR_CLASS_MELEE
+        atk_cls = (
+            ARMOR_CLASS_PIERCE if b_id == ENEMY_FIRE_DRAKE_ID else ARMOR_CLASS_MELEE
+        )
         for ai_p in AI_PLAYERS:
             safe_call(
                 t_init_stats.new_effect.modify_attribute,
@@ -846,7 +823,6 @@ def _setup_special_auras_and_hazards(tm: Any, ctx: dict[str, Any]) -> None:
     """Set up Ecthelion's Fountain Aura, Rog's Wrath, Duilin's Vantage, and North Quarter Fire Hazards."""
     sectors = ctx["sectors"]
 
-    # 1. Ecthelion's Royal Fountain Aura (Heals allies + weakens Balrogs/Gothmog in the water)
     fx1, fy1, fx2, fy2 = sectors["royal_fountain"]
     t_fountain_weaken = tm.add_trigger(
         name="Aura_Fountain_Weaken_Balrogs",
@@ -872,7 +848,6 @@ def _setup_special_auras_and_hazards(tm: Any, ctx: dict[str, Any]) -> None:
         area_y2=fy2,
         quantity=140,
     )
-    # Also heal Noldor units standing in the Royal Fountain
     for p_id in HUMAN_PLAYERS:
         safe_call(
             t_fountain_weaken.new_effect.damage_object,
@@ -884,7 +859,6 @@ def _setup_special_auras_and_hazards(tm: Any, ctx: dict[str, Any]) -> None:
             quantity=-60,
         )
 
-    # 2. North Quarter Fire Hazard (Damages units in north_fire_zone until P2 opens the Aqueduct)
     nx1, ny1, nx2, ny2 = sectors["north_fire_zone"]
     t_north_fire = tm.add_trigger(
         name="Hazard_North_Avenue_Fires",
@@ -904,7 +878,6 @@ def _setup_special_auras_and_hazards(tm: Any, ctx: dict[str, Any]) -> None:
         )
     ctx["north_fire_trigger_id"] = t_north_fire.trigger_id
 
-    # 3. P1 House of the Hammer: Wrath of Rog when fighting Balrogs (P7)
     t_rog_wrath = tm.add_trigger(
         name="Aura_Rog_Wrath_Against_Balrogs",
         enabled=True,
@@ -933,7 +906,6 @@ def _setup_special_auras_and_hazards(tm: Any, ctx: dict[str, Any]) -> None:
 
 def _setup_iron_dragon_corridor_spawners(tm: Any, ctx: dict[str, Any]) -> None:
     """Spawn P6 Iron Dragons in North & East Avenues and loop Orc reinforcement drops while Dragons live."""
-    # Spawn initial Iron Dragons & Fire Drakes at 0:15
     t_spawn_dragons = tm.add_trigger(
         name="P6_Spawn_Iron_Dragons_Phase1",
         enabled=True,
@@ -942,7 +914,6 @@ def _setup_iron_dragon_corridor_spawners(tm: Any, ctx: dict[str, Any]) -> None:
     safe_call(t_spawn_dragons.new_condition.timer, timer=15)
 
     dragon_spawns: list[tuple[int, int, int, int, int]] = [
-        # (unit_id, sx, sy, target_x, target_y)
         (ENEMY_IRON_DRAGON_RAM_ID, 61, 108, 61, 78),
         (ENEMY_FIRE_DRAKE_ID, 59, 108, 61, 78),
         (ENEMY_FIRE_DRAKE_ID, 63, 108, 61, 78),
@@ -969,14 +940,20 @@ def _setup_iron_dragon_corridor_spawners(tm: Any, ctx: dict[str, Any]) -> None:
             location_y=ty,
         )
 
-    add_chat_and_flare(
-        t_spawn_dragons,
-        "<ORANGE>[Zelazne Smoki Morgotha] Pancerne machiny P6 wtoczyly sie w Aleje Polnocna i Wschodnia! Zniszczcie je, aby zatrzymac zrzuty Orkow!",
-        61,
-        106,
-    )
+    for p_id in HUMAN_PLAYERS:
+        safe_call(
+            t_spawn_dragons.new_effect.send_chat,
+            source_player=p_id,
+            message="<ORANGE>[Zelazne Smoki Morgotha] Pancerne machiny P6 wtoczyly sie w Aleje Polnocna i Wschodnia! Zniszczcie je, aby zatrzymac zrzuty Orkow!",
+        )
+        safe_call(
+            t_spawn_dragons.new_effect.create_object,
+            source_player=p_id,
+            object_list_unit_id=FLARE_UNIT_ID,
+            location_x=61,
+            location_y=106,
+        )
 
-    # Create corridor zone spawners: as long as a P6 unit is inside the corridor zone, spawn P5 Orcs every 32s
     corridors = ctx["dragon_corridors"]
     for ave_name, zones in corridors.items():
         for idx, (zx1, zy1, zx2, zy2) in enumerate(zones):
@@ -997,7 +974,6 @@ def _setup_iron_dragon_corridor_spawners(tm: Any, ctx: dict[str, Any]) -> None:
                 area_y2=zy2,
                 quantity=1,
             )
-            # Spawn 5 Orc Infantry + 2 Uruk Brutes + 2 Crossbowmen from the belly of the Iron Dragon
             for i in range(5):
                 safe_call(
                     t_drop.new_effect.create_object,

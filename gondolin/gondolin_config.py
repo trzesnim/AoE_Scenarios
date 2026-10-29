@@ -107,62 +107,62 @@ PALISADE_GATE_X_ID: int = 789
 PALISADE_GATE_Y_ID: int = 793
 
 # Hero Unit IDs (Tracked strictly by object_list_unit_id + source_player, NEVER by reference_id!)
-HERO_TUOR_ID: int = 426          # Harald Hardraada (Great Axe Dramborleg)
-HERO_ROG_ID: int = 1066          # Edward Longshanks / Heavy Warlord
-HERO_ECTHELION_ID: int = 168     # Belisarius / Silver Lord of the Fountain
-HERO_EGALMOTH_ID: int = 682      # Henry V / Lord of the Heavenly Arch
-HERO_GLORFINDEL_ID: int = 172    # La Hire / Golden-haired Lord with broadsword
-HERO_DUILIN_ID: int = 428        # Hrolf the Ganger / Swallow Sniper Captain
-HERO_IDRIL_ID: int = 1292        # Queen (Idril Celebrindal)
-HERO_GALDOR_ID: int = 636        # Guy Josselyne / Tall Lord of the Tree
-HERO_EARENDIL_ID: int = 831      # Royal Heir / Young Earendil (VIP ward)
-HERO_SALGANT_ID: int = 642       # William the Conqueror (Mounted Lord of the Harp)
-SANCTUARY_KING_ID: int = 434     # King unit isolated inside the Balance Sanctuary
+HERO_TUOR_ID: int = 426  # Harald Hardraada (Great Axe Dramborleg)
+HERO_ROG_ID: int = 1066  # Edward Longshanks / Heavy Warlord
+HERO_ECTHELION_ID: int = 168  # Belisarius / Silver Lord of the Fountain
+HERO_EGALMOTH_ID: int = 682  # Henry V / Lord of the Heavenly Arch
+HERO_GLORFINDEL_ID: int = 172  # La Hire / Golden-haired Lord with broadsword
+HERO_DUILIN_ID: int = 428  # Hrolf the Ganger / Swallow Sniper Captain
+HERO_IDRIL_ID: int = 1292  # Queen (Idril Celebrindal)
+HERO_GALDOR_ID: int = 636  # Guy Josselyne / Tall Lord of the Tree
+HERO_EARENDIL_ID: int = 831  # Royal Heir / Young Earendil (VIP ward)
+HERO_SALGANT_ID: int = 642  # William the Conqueror (Mounted Lord of the Harp)
+SANCTUARY_KING_ID: int = 434  # King unit isolated inside the Balance Sanctuary
 
 # Player Retinue Unit IDs
 # P1: House of the Wing & House of the Hammer of Wrath
-UNIT_HAMMER_SMITH_ID: int = 1703       # Elite Obuch (strips enemy armor with warhammers)
-UNIT_WING_GUARD_ID: int = 693          # Elite Berserk (heavy axe infantry)
-UNIT_WING_CHAMPION_ID: int = 567       # Champion
+UNIT_HAMMER_SMITH_ID: int = 1703  # Elite Obuch (strips enemy armor with warhammers)
+UNIT_WING_GUARD_ID: int = 693  # Elite Berserk (heavy axe infantry)
+UNIT_WING_CHAMPION_ID: int = 567  # Champion
 
 # P2: House of the Fountain & House of the Heavenly Arch
-UNIT_FOUNTAIN_GUARD_ID: int = 1661     # Elite Serjeant (silver shield infantry)
-UNIT_FOUNTAIN_HALB_ID: int = 359       # Halberdier
-UNIT_ARCH_LONGBOW_ID: int = 530        # Elite Longbowman
-UNIT_ARCH_RATTAN_ID: int = 1130        # Elite Rattan Archer
+UNIT_FOUNTAIN_GUARD_ID: int = 1661  # Elite Serjeant (silver shield infantry)
+UNIT_FOUNTAIN_HALB_ID: int = 359  # Halberdier
+UNIT_ARCH_LONGBOW_ID: int = 530  # Elite Longbowman
+UNIT_ARCH_RATTAN_ID: int = 1130  # Elite Rattan Archer
 
 # P3: House of the Golden Flower & House of the Swallow
-UNIT_FLOWER_BLADE_ID: int = 882        # Condottiero (fast shock infantry)
-UNIT_FLOWER_CAV_ID: int = 569          # Paladin (mounted vanguard)
-UNIT_SWALLOW_SNIPER_ID: int = 469      # Elite Genoese Crossbowman
-UNIT_HARP_HEALER_ID: int = 125         # Monk (heals allies)
+UNIT_FLOWER_BLADE_ID: int = 882  # Condottiero (fast shock infantry)
+UNIT_FLOWER_CAV_ID: int = 569  # Paladin (mounted vanguard)
+UNIT_SWALLOW_SNIPER_ID: int = 469  # Elite Genoese Crossbowman
+UNIT_HARP_HEALER_ID: int = 125  # Monk (heals allies)
 
 # P4: House of the Tree & Wardens of the Secret Way
-UNIT_TREE_PIKE_ID: int = 1699          # Flemish Militia (heavy polearm infantry)
-UNIT_TREE_SLINGER_ID: int = 185        # Slinger (anti-infantry ranged support)
-UNIT_IDRIL_SAPPER_ID: int = 440        # Petard (demolition engineer)
-UNIT_REFUGEE_CART_ID: int = 128        # Trade Cart Empty (Mithril / Relic convoy)
-UNIT_REFUGEE_CIV_ID: int = 293         # Female Villager / Noldor Citizen (Gaia/P4)
-UNIT_EAGLE_VANGUARD_ID: int = 752      # Elite Eagle Warrior (Thorondor's Ground Strike)
+UNIT_TREE_PIKE_ID: int = 1699  # Flemish Militia (heavy polearm infantry)
+UNIT_TREE_SLINGER_ID: int = 185  # Slinger (anti-infantry ranged support)
+UNIT_IDRIL_SAPPER_ID: int = 440  # Petard (demolition engineer)
+UNIT_REFUGEE_CART_ID: int = 128  # Trade Cart Empty (Mithril / Relic convoy)
+UNIT_REFUGEE_CIV_ID: int = 293  # Female Villager / Noldor Citizen (Gaia/P4)
+UNIT_EAGLE_VANGUARD_ID: int = 752  # Elite Eagle Warrior (Thorondor's Ground Strike)
 
 # Enemy Unit IDs (P5: Angband Horde, P6: Iron Dragons, P7: Balrogs, P8: Maeglin's Traitors)
-ENEMY_ORC_INFANTRY_ID: int = 1124      # Elite Karambit Warrior (swarming Orcs)
-ENEMY_ORC_BRUTE_ID: int = 473          # Two-Handed Swordsman (Uruk heavy infantry)
-ENEMY_ORC_ARCHER_ID: int = 4           # Bowman / Orc Crossbowman
-ENEMY_ORC_CROSSBOW_ID: int = 24        # Crossbowman
-ENEMY_DIRE_WOLF_ID: int = 89           # Dire Wolf
-ENEMY_WARG_RIDER_ID: int = 756         # Elite Tarkhan (torch-wielding wolf/cavalry raider)
+ENEMY_ORC_INFANTRY_ID: int = 1124  # Elite Karambit Warrior (swarming Orcs)
+ENEMY_ORC_BRUTE_ID: int = 473  # Two-Handed Swordsman (Uruk heavy infantry)
+ENEMY_ORC_ARCHER_ID: int = 4  # Bowman / Orc Crossbowman
+ENEMY_ORC_CROSSBOW_ID: int = 24  # Crossbowman
+ENEMY_DIRE_WOLF_ID: int = 89  # Dire Wolf
+ENEMY_WARG_RIDER_ID: int = 756  # Elite Tarkhan (torch-wielding wolf/cavalry raider)
 
-ENEMY_IRON_DRAGON_RAM_ID: int = 548    # Siege Ram (armored transport dragon)
-ENEMY_FIRE_DRAKE_ID: int = 188         # Flamethrower (fire-breathing Uruloki machine)
-ENEMY_HEAVY_SCORPION_ID: int = 542     # Heavy Scorpion
+ENEMY_IRON_DRAGON_RAM_ID: int = 548  # Siege Ram (armored transport dragon)
+ENEMY_FIRE_DRAKE_ID: int = 188  # Flamethrower (fire-breathing Uruloki machine)
+ENEMY_HEAVY_SCORPION_ID: int = 542  # Heavy Scorpion
 
-ENEMY_BALROG_BOSS_ID: int = 1737       # Elite Urumi Swordsman (whip of fire & splash damage)
-ENEMY_GOTHMOG_ID: int = 1713           # Savar / High Lord of Balrogs
+ENEMY_BALROG_BOSS_ID: int = 1737  # Elite Urumi Swordsman (whip of fire & splash damage)
+ENEMY_GOTHMOG_ID: int = 1713  # Savar / High Lord of Balrogs
 
-ENEMY_MOLE_TRAITOR_ID: int = 878       # Elite Boyar (heavy dark armor with pick/axe)
-ENEMY_MOLE_PIKE_ID: int = 532          # Elite Teutonic Knight (Maeglin's Royal Guard)
-ENEMY_MAEGLIN_ID: int = 640            # Mordred / Traitor Prince of the Mole
+ENEMY_MOLE_TRAITOR_ID: int = 878  # Elite Boyar (heavy dark armor with pick/axe)
+ENEMY_MOLE_PIKE_ID: int = 532  # Elite Teutonic Knight (Maeglin's Royal Guard)
+ENEMY_MAEGLIN_ID: int = 640  # Mordred / Traitor Prince of the Mole
 
 # Lists for safe uint8 modify_attribute (Rule 6: strictly separate melee class 4 and ranged class 3)
 ENEMY_MELEE_UNITS: list[int] = [
@@ -225,10 +225,10 @@ AI_PLAYERS: list[PlayerId] = [
 # Master Closed-Loop Balance Dictionary
 BALANCE: dict[str, Any] = {
     "starting_seals": 3,
-    "out_of_combat_regen_per_min": 30,     # 0.5 HP/s passive recovery for Noldor units
-    "hero_regen_per_min": 120,             # 2.0 HP/s regeneration for Heroes
-    "soft_cap_critical_threshold": 15,     # Below 15 units -> Emergency Rescue Pack
-    "soft_cap_dominance_threshold": 28,    # Above 28 units -> Glory Gold + Stat Buff instead of clutter
+    "out_of_combat_regen_per_min": 30,  # 0.5 HP/s passive recovery for Noldor units
+    "hero_regen_per_min": 120,  # 2.0 HP/s regeneration for Heroes
+    "soft_cap_critical_threshold": 15,  # Below 15 units -> Emergency Rescue Pack
+    "soft_cap_dominance_threshold": 28,  # Above 28 units -> Glory Gold + Stat Buff instead of clutter
     "mid_encounter_escalation_delay": 20,  # Seconds before checking if players crushed base wave
     "sanctuary_harder_hp_add": 20,
     "sanctuary_harder_atk_add": 2,

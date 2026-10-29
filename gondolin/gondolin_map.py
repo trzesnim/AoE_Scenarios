@@ -241,7 +241,9 @@ def _sculpt_world_terrain(grid: SafeMapGrid) -> None:
 
     # Water Reservoir & Aqueduct Channel in P2's Fountain District (X=76..96, Y=58..76)
     grid.paint_box(80, 62, 92, 72, TerrainId.WATER_AZURE, elev=4, protect_trees=True)
-    grid.paint_corridor(76, 65, 65, 63, 2, TerrainId.SHALLOWS, elev=5, protect_trees=True)
+    grid.paint_corridor(
+        76, 65, 65, 63, 2, TerrainId.SHALLOWS, elev=5, protect_trees=True
+    )
 
     # Grand Avenues of Gondolin (minimum 5 tiles wide for smooth unit & Iron Dragon movement)
     # North Avenue (Great Gate -> Great Market -> Amon Gwareth)
@@ -262,36 +264,62 @@ def _sculpt_world_terrain(grid: SafeMapGrid) -> None:
     # 4. Phase II Dual Routes across Tumladen:
     # Route A (Lower): Secret Way of Idril (Underground Tunnel & Dry Riverbed, Y=35..55, X=105..175, elev=1)
     grid.paint_box(102, 22, 182, 58, TerrainId.FOREST_PINE, elev=5, protect_trees=False)
-    grid.paint_corridor(72, 52, 112, 38, 3, TerrainId.ROAD_FUNGUS, elev=1, protect_trees=True)
-    grid.paint_corridor(112, 38, 175, 42, 4, TerrainId.BEACH_ROCK, elev=1, protect_trees=True)
-    grid.paint_corridor(175, 42, 185, 85, 4, TerrainId.DIRT_1, elev=2, protect_trees=True)
+    grid.paint_corridor(
+        72, 52, 112, 38, 3, TerrainId.ROAD_FUNGUS, elev=1, protect_trees=True
+    )
+    grid.paint_corridor(
+        112, 38, 175, 42, 4, TerrainId.ROAD_BROKEN, elev=1, protect_trees=True
+    )
+    grid.paint_corridor(
+        175, 42, 185, 85, 4, TerrainId.DIRT_1, elev=2, protect_trees=True
+    )
 
     # Route B (Upper): Misty Plains of Tumladen & Cliff Overlook (X=105..175, Y=65..125, elev=3)
-    grid.paint_corridor(76, 72, 115, 88, 4, TerrainId.DIRT_2, elev=3, protect_trees=True)
-    grid.paint_corridor(115, 88, 172, 88, 5, TerrainId.DIRT_2, elev=3, protect_trees=True)
+    grid.paint_corridor(
+        76, 72, 115, 88, 4, TerrainId.DIRT_2, elev=3, protect_trees=True
+    )
+    grid.paint_corridor(
+        115, 88, 172, 88, 5, TerrainId.DIRT_2, elev=3, protect_trees=True
+    )
     # Overlook ledges along Y=60..66 where Orc archers fire down toward the Dry Riverbed
-    grid.paint_box(122, 58, 165, 68, TerrainId.GRAVEL, elev=4, protect_trees=True)
+    grid.paint_box(122, 58, 165, 68, TerrainId.ROAD_BROKEN, elev=4, protect_trees=True)
     # Connecting ramp between Upper Tumladen and Lower Dry Riverbed at the reunion point (X=178, Y=85)
     grid.paint_corridor(172, 88, 185, 85, 4, TerrainId.ROAD, elev=3, protect_trees=True)
 
     # 5. Phase III: Orfalch Echor (Gorge of Seven Gates) & Cirith Thoronath (NE Quadrant)
     # Winding gorge climbing from (185, 85) -> (215, 135) -> (190, 185) -> (220, 222)
-    grid.paint_corridor(185, 85, 212, 130, 4, TerrainId.ROAD, elev=4, protect_trees=True)
-    grid.paint_corridor(212, 130, 190, 175, 4, TerrainId.ROAD, elev=5, protect_trees=True)
+    grid.paint_corridor(
+        185, 85, 212, 130, 4, TerrainId.ROAD, elev=4, protect_trees=True
+    )
+    grid.paint_corridor(
+        212, 130, 190, 175, 4, TerrainId.ROAD, elev=5, protect_trees=True
+    )
     # High goat-paths flanking Orfalch Echor for P3/P4 vertical cooperation
-    grid.paint_corridor(176, 92, 198, 132, 2, TerrainId.GRAVEL, elev=6, protect_trees=True)
-    grid.paint_corridor(198, 132, 178, 175, 2, TerrainId.GRAVEL, elev=7, protect_trees=True)
-    grid.paint_corridor(198, 132, 212, 130, 2, TerrainId.GRAVEL, elev=5, protect_trees=True)
-    grid.paint_corridor(178, 175, 190, 175, 2, TerrainId.GRAVEL, elev=6, protect_trees=True)
+    grid.paint_corridor(
+        176, 92, 198, 132, 2, TerrainId.DIRT_3, elev=6, protect_trees=True
+    )
+    grid.paint_corridor(
+        198, 132, 178, 175, 2, TerrainId.DIRT_3, elev=7, protect_trees=True
+    )
+    grid.paint_corridor(
+        198, 132, 212, 130, 2, TerrainId.DIRT_3, elev=5, protect_trees=True
+    )
+    grid.paint_corridor(
+        178, 175, 190, 175, 2, TerrainId.DIRT_3, elev=6, protect_trees=True
+    )
 
     # Cirith Thoronath (Eagle's Cleft) - narrow precipice above a deep chasm (X=190..225, Y=175..225)
-    # Deep abyss next to the ledge (elev=0, dark water/ice below)
-    grid.paint_box(196, 178, 232, 215, TerrainId.WATER_DEEP, elev=0, protect_trees=True)
+    # Deep abyss next to the ledge (elev=0, dark water below)
+    grid.paint_box(196, 178, 232, 215, TerrainId.WATER_AZURE, elev=0, protect_trees=True)
     # Narrow mountain ledge (elev=7)
-    grid.paint_corridor(190, 175, 190, 218, 3, TerrainId.SNOW_ROAD, elev=7, protect_trees=True)
-    grid.paint_corridor(190, 218, 224, 224, 4, TerrainId.SNOW_ROAD, elev=6, protect_trees=True)
+    grid.paint_corridor(
+        190, 175, 190, 218, 3, TerrainId.ROAD, elev=7, protect_trees=True
+    )
+    grid.paint_corridor(
+        190, 218, 224, 224, 4, TerrainId.ROAD, elev=6, protect_trees=True
+    )
     # Glorfindel's Duel Spur jutting out over the abyss at (198, 198)
-    grid.paint_box(193, 194, 203, 202, TerrainId.GRAVEL, elev=7, protect_trees=True)
+    grid.paint_box(193, 194, 203, 202, TerrainId.ROAD_BROKEN, elev=7, protect_trees=True)
 
     # 6. Balance Sanctuary chamber isolated in NW corner (X=6..18, Y=222..234)
     grid.paint_box(4, 220, 20, 236, TerrainId.ROAD, elev=4, protect_trees=True)
@@ -321,10 +349,14 @@ def _populate_forests_and_borders(grid: SafeMapGrid, um: Any) -> None:
     # Surround Balance Sanctuary (X=4..20, Y=220..236) with indestructible rock cliffs
     for x in range(4, 21):
         for y in (220, 236):
-            grid.place_unit_safe(um, PlayerId.GAIA, ROCK_CLIFF_ID, x, y, clear_trees_around=False)
+            grid.place_unit_safe(
+                um, PlayerId.GAIA, ROCK_CLIFF_ID, x, y, clear_trees_around=False
+            )
     for y in range(221, 236):
         for x in (4, 20):
-            grid.place_unit_safe(um, PlayerId.GAIA, ROCK_CLIFF_ID, x, y, clear_trees_around=False)
+            grid.place_unit_safe(
+                um, PlayerId.GAIA, ROCK_CLIFF_ID, x, y, clear_trees_around=False
+            )
 
 
 def build_map_and_entities(scenario: Any) -> dict[str, Any]:
@@ -386,7 +418,9 @@ def build_map_and_entities(scenario: Any) -> dict[str, Any]:
     # =========================================================================
     # Amon Gwareth (Central Royal Square)
     register_bldg("tower_of_turgon", PlayerId.ONE, FEITORIA_ID, 61, 70, footprint=5)
-    register_bldg("royal_fountain_bldg", PlayerId.TWO, MONASTERY_ID, 61, 58, footprint=3)
+    register_bldg(
+        "royal_fountain_bldg", PlayerId.TWO, MONASTERY_ID, 61, 58, footprint=3
+    )
 
     # Ornamental cypress trees & torches on Amon Gwareth
     for ox, oy in [(53, 55), (69, 55), (53, 68), (69, 68)]:
@@ -399,14 +433,20 @@ def build_map_and_entities(scenario: Any) -> dict[str, Any]:
 
     # Path A (West): Forges of Rog & Royal Armory
     register_bldg("great_forge", PlayerId.ONE, BLACKSMITH_ID, 24, 63, footprint=3)
-    register_bldg("forge_workshop", PlayerId.ONE, SIEGE_WORKSHOP_ID, 24, 70, footprint=4)
+    register_bldg(
+        "forge_workshop", PlayerId.ONE, SIEGE_WORKSHOP_ID, 24, 70, footprint=4
+    )
     # 3 Mithril Supply Carts waiting at the Great Forge
     for cy_off in (59, 63, 67):
-        grid.place_unit_safe(um, PlayerId.ONE, UNIT_REFUGEE_CART_ID, 29, cy_off, footprint=1)
+        grid.place_unit_safe(
+            um, PlayerId.ONE, UNIT_REFUGEE_CART_ID, 29, cy_off, footprint=1
+        )
 
     # Path B (East): Great Market of Penlod & Fountain Aqueduct
     register_bldg("great_market", PlayerId.TWO, MARKET_ID, 94, 63, footprint=4)
-    register_bldg("aqueduct_control", PlayerId.EIGHT, UNIVERSITY_ID, 84, 74, footprint=4)
+    register_bldg(
+        "aqueduct_control", PlayerId.EIGHT, UNIVERSITY_ID, 84, 74, footprint=4
+    )
 
     # North Quarter: Tower of Snow (P3 Duilin high vantage point)
     register_bldg("snow_watchtower", PlayerId.THREE, KEEP_ID, 74, 106, footprint=2)
@@ -416,12 +456,20 @@ def build_map_and_entities(scenario: Any) -> dict[str, Any]:
     # Blockade locking the House of the Harp inside Salgant's courtyard
     for bx in range(86, 95, 2):
         r_obj = grid.place_unit_safe(
-            um, PlayerId.GAIA, ROCK_CLIFF_ID, bx, 33, footprint=1, clear_trees_around=False
+            um,
+            PlayerId.GAIA,
+            ROCK_CLIFF_ID,
+            bx,
+            33,
+            footprint=1,
+            clear_trees_around=False,
         )
         destructible_rocks["salgant_gate_rocks"].append(r_obj.reference_id)
     # Trapped House of the Harp healers inside Salgant's court
     for hx in (89, 91, 93):
-        grid.place_unit_safe(um, PlayerId.THREE, UNIT_HARP_HEALER_ID, hx, 22, footprint=1)
+        grid.place_unit_safe(
+            um, PlayerId.THREE, UNIT_HARP_HEALER_ID, hx, 22, footprint=1
+        )
 
     # SW Quarter: House of Tuor & Caragdur Precipice (P4 cut off by P8 Maeglin's Traitors)
     register_bldg("house_of_tuor", PlayerId.FOUR, KREPOST_ID, 24, 24, footprint=4)
@@ -429,7 +477,13 @@ def build_map_and_entities(scenario: Any) -> dict[str, Any]:
     # Internal blockade separating P1 (South Gate: 61, 24) from P4 (Caragdur: 24, 24)
     for by in range(22, 31):
         r_obj = grid.place_unit_safe(
-            um, PlayerId.GAIA, ROCK_CLIFF_ID, 42, by, footprint=1, clear_trees_around=False
+            um,
+            PlayerId.GAIA,
+            ROCK_CLIFF_ID,
+            42,
+            by,
+            footprint=1,
+            clear_trees_around=False,
         )
         destructible_rocks["caragdur_blockade"].append(r_obj.reference_id)
 
@@ -437,14 +491,26 @@ def build_map_and_entities(scenario: Any) -> dict[str, Any]:
     for fx in range(55, 68, 3):
         for fy in (94, 100):
             f_obj = grid.place_unit_safe(
-                um, PlayerId.GAIA, FLAME_EFFECT_ID, fx, fy, footprint=1, clear_trees_around=False
+                um,
+                PlayerId.GAIA,
+                FLAME_EFFECT_ID,
+                fx,
+                fy,
+                footprint=1,
+                clear_trees_around=False,
             )
             destructible_rocks["north_fire_objects"].append(f_obj.reference_id)
 
     # Rocks blocking the Northern Moat shallows (removed when P2 floods the moat)
     for rx in range(48, 75, 3):
         r_obj = grid.place_unit_safe(
-            um, PlayerId.GAIA, ROCK_CLIFF_ID, rx, 114, footprint=1, clear_trees_around=False
+            um,
+            PlayerId.GAIA,
+            ROCK_CLIFF_ID,
+            rx,
+            114,
+            footprint=1,
+            clear_trees_around=False,
         )
         destructible_rocks["aqueduct_dry_rocks"].append(r_obj.reference_id)
 
@@ -452,7 +518,9 @@ def build_map_and_entities(scenario: Any) -> dict[str, Any]:
     for wx in range(18, 103, 6):
         if abs(wx - 61) > 6:
             grid.place_unit_safe(um, PlayerId.ONE, GUARD_TOWER_ID, wx, 18, footprint=2)
-            grid.place_unit_safe(um, PlayerId.THREE, GUARD_TOWER_ID, wx, 110, footprint=2)
+            grid.place_unit_safe(
+                um, PlayerId.THREE, GUARD_TOWER_ID, wx, 110, footprint=2
+            )
     for wy in range(24, 106, 6):
         if abs(wy - 63) > 6:
             grid.place_unit_safe(um, PlayerId.ONE, GUARD_TOWER_ID, 18, wy, footprint=2)
@@ -462,12 +530,24 @@ def build_map_and_entities(scenario: Any) -> dict[str, Any]:
     register_bldg("idril_waygate", PlayerId.FOUR, OUTPOST_ID, 74, 52, footprint=2)
     for ry in range(49, 56):
         r_obj = grid.place_unit_safe(
-            um, PlayerId.GAIA, ROCK_CLIFF_ID, 78, ry, footprint=1, clear_trees_around=False
+            um,
+            PlayerId.GAIA,
+            ROCK_CLIFF_ID,
+            78,
+            ry,
+            footprint=1,
+            clear_trees_around=False,
         )
         destructible_rocks["tumladen_exit_rocks"].append(r_obj.reference_id)
     for ry in range(69, 76):
         r_obj = grid.place_unit_safe(
-            um, PlayerId.GAIA, ROCK_CLIFF_ID, 78, ry, footprint=1, clear_trees_around=False
+            um,
+            PlayerId.GAIA,
+            ROCK_CLIFF_ID,
+            78,
+            ry,
+            footprint=1,
+            clear_trees_around=False,
         )
         destructible_rocks["tumladen_exit_rocks"].append(r_obj.reference_id)
 
@@ -486,7 +566,7 @@ def build_map_and_entities(scenario: Any) -> dict[str, Any]:
     # 3. PHASE III STRUCTURES: SEVEN GATES OF ORFALCH ECHOR & CIRITH THORONATH
     # =========================================================================
     gate_coords: list[tuple[str, int, int]] = [
-        ("orfalch_gate_1", 190, 94),   # 1. Wooden Gate
+        ("orfalch_gate_1", 190, 94),  # 1. Wooden Gate
         ("orfalch_gate_2", 198, 108),  # 2. Stone Gate
         ("orfalch_gate_3", 206, 122),  # 3. Bronze Gate
         ("orfalch_gate_4", 208, 138),  # 4. Iron Gate
@@ -497,7 +577,13 @@ def build_map_and_entities(scenario: Any) -> dict[str, Any]:
     for g_key, gx, gy in gate_coords:
         for dx in range(-2, 3):
             r_obj = grid.place_unit_safe(
-                um, PlayerId.GAIA, ROCK_CLIFF_ID, gx + dx, gy, footprint=1, clear_trees_around=False
+                um,
+                PlayerId.GAIA,
+                ROCK_CLIFF_ID,
+                gx + dx,
+                gy,
+                footprint=1,
+                clear_trees_around=False,
             )
             destructible_rocks[g_key].append(r_obj.reference_id)
 
@@ -509,7 +595,13 @@ def build_map_and_entities(scenario: Any) -> dict[str, Any]:
     # Final blockade at Cirith Thoronath exit (opens when Balrog of the Pass is defeated)
     for dy in range(-2, 3):
         r_obj = grid.place_unit_safe(
-            um, PlayerId.GAIA, ROCK_CLIFF_ID, 218, 222 + dy, footprint=1, clear_trees_around=False
+            um,
+            PlayerId.GAIA,
+            ROCK_CLIFF_ID,
+            218,
+            222 + dy,
+            footprint=1,
+            clear_trees_around=False,
         )
         destructible_rocks["cirith_exit_rocks"].append(r_obj.reference_id)
 
@@ -517,10 +609,13 @@ def build_map_and_entities(scenario: Any) -> dict[str, Any]:
     # 4. PLACE HEROES & STARTING RETINUES (SCATTERED START IN 4 DISTRICTS)
     # =========================================================================
     starts: dict[PlayerId, tuple[int, int]] = {
-        PlayerId.ONE: (61, 24),    # South Gate & Avenue (Tuor & Rog)
-        PlayerId.TWO: (82, 58),    # Fountain Terrace (Ecthelion & Egalmoth)
+        PlayerId.ONE: (61, 24),  # South Gate & Avenue (Tuor & Rog)
+        PlayerId.TWO: (82, 58),  # Fountain Terrace (Ecthelion & Egalmoth)
         PlayerId.THREE: (68, 92),  # North-East Market Approach (Glorfindel & Duilin)
-        PlayerId.FOUR: (28, 28),   # SW Quarter / House of Tuor (Idril, Galdor & Earendil)
+        PlayerId.FOUR: (
+            28,
+            28,
+        ),  # SW Quarter / House of Tuor (Idril, Galdor & Earendil)
     }
 
     player_heroes: dict[PlayerId, list[int]] = {
