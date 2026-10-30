@@ -1,4 +1,4 @@
-"""Configuration, constants, unit IDs, balance dictionary, and lore descriptions for Gondolin Co-op (Etap A)."""
+"""Configuration, constants, unit IDs, balance dictionary, and lore descriptions for Gondolin Co-op."""
 
 from __future__ import annotations
 
@@ -14,6 +14,11 @@ RES_WOOD: int = 1
 RES_STONE: int = 2
 RES_GOLD: int = 3
 RES_BONUS_POP_CAP: int = 32
+
+# Genie Engine ObjectType values (AoE2ScenarioParser.datasets.trigger_lists.ObjectType)
+OBJECT_TYPE_BUILDING: int = 2
+OBJECT_TYPE_CIVILIAN: int = 3
+OBJECT_TYPE_MILITARY: int = 4
 
 # Genie Engine Technology IDs
 TECH_CARTOGRAPHY: int = 19
@@ -150,7 +155,7 @@ UNIT_REFUGEE_CART_ID: int = 128  # Trade Cart Empty (Mithril / Relic convoy)
 UNIT_REFUGEE_CIV_ID: int = 293  # Female Villager / Noldor Citizen (Gaia/P4)
 UNIT_EAGLE_VANGUARD_ID: int = 752  # Elite Eagle Warrior (Thorondor's Ground Strike)
 
-# Primary frontline unit per human player (used for clean object_list filtering in encounters & soft-cap)
+# Primary & secondary retinue unit per human player (used for spawning reinforcement packs)
 PRIMARY_RETINUE_UNIT_BY_PLAYER: dict[PlayerId, int] = {
     PlayerId.ONE: UNIT_HAMMER_SMITH_ID,
     PlayerId.TWO: UNIT_FOUNTAIN_GUARD_ID,
@@ -304,14 +309,16 @@ AI_PLAYERS: list[PlayerId] = [
 # Master Closed-Loop Balance Dictionary
 BALANCE: dict[str, Any] = {
     "starting_seals": 3,
-    "out_of_combat_regen_per_min": 30,  # 0.5 HP/s passive recovery for Noldor units
-    "hero_regen_per_min": 120,  # 2.0 HP/s regeneration for Heroes
-    "fountain_ally_regen_bonus": 90,  # +1.5 HP/s regeneration near Royal Fountain (no overheal!)
-    "seal_shield_regen_bonus": 240,  # +4.0 HP/s regeneration for 20s after consuming a Seal
-    "soft_cap_primary_critical_max": 7,  # <= 7 primary units (~14 total) -> Critical Rescue Pack
-    "soft_cap_primary_standard_max": 14,  # 8..14 primary units (~15..28 total) -> Standard Pack
-    "soft_cap_primary_dominance_min": 15,  # >= 15 primary units (> 28 total) -> Dominance Bonus
-    "mid_encounter_escalation_delay": 20,  # Seconds before checking if players crushed base wave
+    "seal_grace_window_seconds": 3,       # 3s simultaneous-blast grace window when a Seal is consumed
+    "seal_rally_heal_duration": 20,       # 20s local healing aura duration around the active phase checkpoint
+    "seal_rally_heal_Step_hp": 35,        # +35 HP healed every 2s inside the active phase checkpoint aura
+    "out_of_combat_regen_per_min": 30,    # 0.5 HP/s passive recovery for Noldor units
+    "hero_regen_per_min": 120,            # 2.0 HP/s regeneration for Heroes
+    "fountain_local_heal_hp": 30,         # +30 HP healed every 4s for military units inside Royal Fountain
+    "soft_cap_critical_threshold": 15,    # 0..14 military units -> Critical Rescue Pack
+    "soft_cap_dominance_threshold": 28,   # 15..28 -> Standard Pack; >= 29 military units -> Dominance Bonus
+    "mid_encounter_escalation_delay": 20, # Seconds before checking if players crushed base wave
+    "mid_encounter_military_min": 8,      # Minimum military units in sector to trigger Elite Ambush
     "sanctuary_harder_hp_add": 20,
     "sanctuary_harder_atk_add": 2,
     "sanctuary_easier_hp_mult": 0.85,
@@ -495,7 +502,7 @@ def populate_ingame_scenario_descriptions(scenario: Any) -> None:
         "- P1 (Niebieski - Tuor i Rog): Ciezka piechota i kowale z mlotami zdzierajacymi pancerz. "
         "Niszczyciel Zelaznych Smokow. Tylko P1 uruchamia Krolewskie Kuznie (+statystyki dla wszystkich).\n"
         "- P2 (Czerwony - Ecthelion i Egalmoth): Wlocznicy i dalekosiezni lucznicy. "
-        "Ecthelion otwiera sluzy akweduktu (gasi pozary u P3 i oslabia pancerz Balrogow).\n"
+        "Ecthelion otwiera sluzy akweduktu, a woda Fontanny Krolewskiej lokalnie leczy sojusznikow i rani Balrogow.\n"
         "- P3 (Zielony - Glorfindel i Duilin): Szybka gwardia, uzdrowiciele i strzelcy wyborowi. "
         "Zajmowanie baszt i grani odslania mape i zasadzki wroga.\n"
         "- P4 (Zolty - Idril, Galdor i maly Earendil): Pikinierzy i saperzy. "
@@ -503,21 +510,23 @@ def populate_ingame_scenario_descriptions(scenario: Any) -> None:
         "2. 9 BOHATEROW I 3 PIECZECIE REZERWY TURGONA:\n"
         "- Wszystkich 9 Bohaterow (Tuor, Rog, Ecthelion, Egalmoth, Glorfindel, Duilin, Idril, Galdor, Earendil) "
         "posiada regeneracje 2 HP/s, ale nie sa niesmiertelni.\n"
-        "- Jesli ktorykolwiek z 9 Bohaterow zginie, druzyna zuzywa 1 Pieczec Rezerwy Turgona, a polegly bohater "
-        "odradza sie z oddzialem ratunkowym i 20s premia regeneracji na Punkcie Zbornym aktualnej Fazy. "
-        "Utrata wszystkich 3 Pieczeci i smierc kolejnego bohatera = Porazka.\n\n"
-        "3. PUNKTY CHWALY (ZLOTO):\n"
-        "- Zloto Gracza 1 mierzy Wasz wynik (High Score) za uratowanych mieszkancow, zadania i zachowane Pieczecie."
+        "- Smierc bohatera zuzywa 1 Pieczec Rezerwy Turgona, otwiera 3-sekundowe okno ochronne (grupujace "
+        "ewentualne symultaniczne zgony z tego samego uderzenia w ramach jednej Pieczeci) i odradza poleglych "
+        "bohaterow wraz z gwardia i 20-sekundowa lokalna aura lecznicza na Punkcie Zbornym aktualnej Fazy "
+        "(Faza I: Amon Gwareth, Faza II: Tumladen, Faza III: Orfalch Echor).\n\n"
+        "3. PUNKTY CHWALY (ZLOTO) I SOFT-CAP ARMII:\n"
+        "- Zloto Gracza 1 mierzy Wasz wynik (High Score). W punktach przegrupowania wielkosc calej armii "
+        "wojskowej kazdego gracza (0..14, 15..28, 29+) decyduje o przydziale posilkow lub premii Chwaly."
     )
 
     mm.hints = (
         "WSKAZOWKI TAKTYCZNE:\n"
-        "1. ZELAZNE SMOKI (P6): Dopoki Zelazny Smok zyje w danej alei, co 30 sekund zrzuca nowe oddzialy Orkow. "
+        "1. ZELAZNE SMOKI (P6): Dopoki Zelazny Smok zyje w danej alei, co 32 sekundy zrzuca nowe oddzialy Orkow. "
         "Uzyjcie topornikow Tuora i mlotow Roga (P1), aby szybko zniszczyc kadlub Smoka!\n"
         "2. WSPOLPRACA ZDALNA W FAZIE I: P4 jest odciety w dzielnicy Caragdur przez zdrajcow Maeglina (P8). "
         "P1 musi uderzyc na brame od poludnia. Jednoczesnie P2 powinien odbic Akwedukt, aby ugasic ogien przed P3.\n"
         "3. GOTHMOG I BALROGOWIE (P7): Na suchym ladzie maja ogromny pancerz. Zwabcie ich w wode Fontanny Krolewskiej "
-        "lub zalanej fosy, albo uzyjcie mlotow Roga (Obuchow P1), ktore zdzieraja pancerz z kazdym uderzeniem.\n"
+        "(ktora lokalnie leczy stojacych w niej Noldorow i rani Balrogow) lub uzyjcie mlotow Roga (P1).\n"
         "4. DWA SZLAKI PRZEZ TUMLADEN (FAZA II): Mozecie isc razem lub rozdzielic druzyne na Szlak Dolny (Koryto Rzeki - "
         "wysadzanie podkopow przez P4) oraz Szlak Gorny (Rownina - czyszczenie klifow nad glowami uchodzcow)."
     )
