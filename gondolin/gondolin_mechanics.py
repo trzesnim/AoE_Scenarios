@@ -1,9 +1,9 @@
-"""Trigger helpers, unit stat mutations, hero auras, Iron Dragon spawners, and Closed-Loop scaling."""
+"""Trigger helpers, strict safe_call validator, unit stat/name mutations, auras, and Closed-Loop scaling."""
 
 from __future__ import annotations
 
-import inspect
 from collections.abc import Callable
+import inspect
 from typing import Any
 
 from AoE2ScenarioParser.datasets.players import PlayerId
@@ -36,15 +36,19 @@ from gondolin_config import (
     ENEMY_RANGED_UNITS,
     FLARE_UNIT_ID,
     HERO_DUILIN_ID,
+    HERO_ECTHELION_ID,
     HERO_EGALMOTH_ID,
     HERO_ROG_ID,
     HUMAN_PLAYERS,
     MAP_REVEALER_ID,
+    OBJECT_TYPE_MILITARY,
+    PRIMARY_RETINUE_UNIT_BY_PLAYER,
     RES_BONUS_POP_CAP,
     RES_FOOD,
     RES_GOLD,
     RES_STONE,
     RES_WOOD,
+    SECONDARY_RETINUE_UNIT_BY_PLAYER,
     TECH_BALLISTICS,
     TECH_BLAST_FURNACE,
     TECH_BODKIN_ARROW,
@@ -70,6 +74,7 @@ from gondolin_config import (
     TECH_SQUIRES,
     UNIT_ARCH_LONGBOW_ID,
     UNIT_ARCH_RATTAN_ID,
+    UNIT_DISPLAY_NAMES,
     UNIT_FLOWER_BLADE_ID,
     UNIT_FLOWER_CAV_ID,
     UNIT_FOUNTAIN_GUARD_ID,
@@ -108,10 +113,40 @@ HERO_RANGED_IDS: set[int] = {
 
 
 def safe_call(func: Callable[..., Any], **kwargs: Any) -> Any:
-    """Invoke AoE2ScenarioParser condition/effect methods filtering only supported parameters."""
+    """Invoke AoE2ScenarioParser condition/effect methods and raise ValueError on any unsupported argument."""
     sig = inspect.signature(func)
-    valid_kwargs = {k: v for k, v in kwargs.items() if k in sig.parameters}
-    return func(**valid_kwargs)
+    has_var_kw = any(
+        p.kind == inspect.Parameter.VAR_KEYWORD for p in sig.parameters.values()
+    )
+    if not has_var_kw:
+        unsupported = sorted(set(kwargs.keys()) - set(sig.parameters.keys()))
+        if unsupported:
+            valid = sorted(sig.parameters.keys())
+            func_name = getattr(func, "__qualname__", getattr(func, "__name__", str(func)))
+            msg = (
+                f"[BLAD KRYTYCZNY API] Funkcja '{func_name}' otrzymala nieobslugiwane argumenty: "
+                f"{unsupported}. Dozwolone parametry w tej wersji AoE2ScenarioParser: {valid}"
+            )
+            raise ValueError(msg)
+    return func(**kwargs)
+
+
+def apply_unit_lore_name(
+    trig: Any,
+    player: PlayerId,
+    unit_id: int,
+    custom_name: str | None = None,
+) -> None:
+    """Apply canonical Silmarillion Polish name to all units of unit_id owned by player."""
+    label = custom_name or UNIT_DISPLAY_NAMES.get(unit_id)
+    if not label:
+        return
+    safe_call(
+        trig.new_effect.change_object_name,
+        source_player=player,
+        object_list_unit_id=unit_id,
+        message=label,
+    )
 
 
 def add_chat_and_flare(
@@ -144,7 +179,7 @@ def spawn_progressive_revealer(
     y: int,
     player: PlayerId = PlayerId.ONE,
 ) -> None:
-    """Spawn a Map Revealer dynamically during gameplay to progressively lift Fog of War."""
+    """Spawn a Map Revealer dynamically during gameplay for Player 1 (shared via Cartography with P1-P4)."""
     safe_call(
         trig.new_effect.create_object,
         source_player=player,
@@ -229,8 +264,10 @@ def create_escalating_encounter(
     base_spawns: list[tuple[PlayerId, int, int, int, int]],
     elite_spawns: list[tuple[PlayerId, int, int, int, int]],
     arm_at_start: bool = True,
+    trigger_player: PlayerId = PlayerId.ONE,
+    trigger_unit_id: int | None = None,
 ) -> tuple[Any, Any]:
-    """Create a 2-stage Closed-Loop encounter: 65% Base Wave + conditional 35% Elite Ambush after 20s."""
+    """Create a 2-stage Closed-Loop encounter separating t_base initiation from t_elite/reward military checks."""
     x1, y1, x2, y2 = sector
     tx, ty = target_xy
 
@@ -239,17 +276,33 @@ def create_escalating_encounter(
         enabled=arm_at_start,
         looping=False,
     )
-    safe_call(
-        t_base.new_condition.objects_in_area,
-        source_player=PlayerId.ONE,
-        area_x1=x1,
-        area_y1=y1,
-        area_x2=x2,
-        area_y2=y2,
-        quantity=1,
-    )
+    # 1. t_base initiation: can require a specific Hero/Unit (e.g. Rog) OR any Military unit of trigger_player
+    if trigger_unit_id is not None:
+        safe_call(
+            t_base.new_condition.objects_in_area,
+            source_player=trigger_player,
+            object_list=trigger_unit_id,
+            area_x1=x1,
+            area_y1=y1,
+            area_x2=x2,
+            area_y2=y2,
+            quantity=1,
+        )
+    else:
+        safe_call(
+            t_base.new_condition.objects_in_area,
+            source_player=trigger_player,
+            object_type=OBJECT_TYPE_MILITARY,
+            area_x1=x1,
+            area_y1=y1,
+            area_x2=x2,
+            area_y2=y2,
+            quantity=1,
+        )
 
+    spawned_types_base: set[tuple[PlayerId, int]] = set()
     for ai_p, unit_id, count, sx, sy in base_spawns:
+        spawned_types_base.add((ai_p, unit_id))
         for i in range(count):
             ox = sx + (i % 4) - 1
             oy = sy + (i // 4) - 1
@@ -271,6 +324,8 @@ def create_escalating_encounter(
             location_x=tx,
             location_y=ty,
         )
+    for ai_p, unit_id in spawned_types_base:
+        apply_unit_lore_name(t_base, ai_p, unit_id)
 
     t_elite = tm.add_trigger(
         name=f"Enc_{name_prefix}_EliteAmbush",
@@ -282,21 +337,27 @@ def create_escalating_encounter(
         trigger_id=t_elite.trigger_id,
     )
 
+    # 2. Mid-Encounter Escalation check after 20 seconds:
+    # Always checks total Military squad strength (object_type=OBJECT_TYPE_MILITARY, quantity=8),
+    # NEVER 5 copies of a unique hero like Rog!
     safe_call(
         t_elite.new_condition.timer,
         timer=BALANCE["mid_encounter_escalation_delay"],
     )
     safe_call(
         t_elite.new_condition.objects_in_area,
-        source_player=PlayerId.ONE,
-        area_x1=x1 - 8,
-        area_y1=y1 - 8,
-        area_x2=x2 + 8,
-        area_y2=y2 + 8,
-        quantity=8,
+        source_player=trigger_player,
+        object_type=OBJECT_TYPE_MILITARY,
+        area_x1=max(0, x1 - 8),
+        area_y1=max(0, y1 - 8),
+        area_x2=min(239, x2 + 8),
+        area_y2=min(239, y2 + 8),
+        quantity=BALANCE["mid_encounter_military_min"],
     )
 
+    spawned_types_elite: set[tuple[PlayerId, int]] = set()
     for ai_p, unit_id, count, sx, sy in elite_spawns:
+        spawned_types_elite.add((ai_p, unit_id))
         for i in range(count):
             ox = sx + (i % 4) - 1
             oy = sy + (i // 4) - 1
@@ -318,12 +379,96 @@ def create_escalating_encounter(
             location_x=tx,
             location_y=ty,
         )
+    for ai_p, unit_id in spawned_types_elite:
+        apply_unit_lore_name(t_elite, ai_p, unit_id)
 
-    award_glory_gold(
+    add_chat_and_flare(
         t_elite,
-        BALANCE["glory_scores"]["elite_ambush_defeated"],
-        f"<ORANGE>[Zasadzka Elitarna] Odwod Angbandu uderza w sektorze {name_prefix}! (+200 Chwaly)",
+        f"<ORANGE>[Zasadzka Elitarna] Odwod Angbandu uderza w sektorze {name_prefix}! Pokonajcie ich, aby zdobyc +200 Chwaly!",
+        tx,
+        ty,
     )
+
+    # 3. Camp Leash trigger keeping Elite Ambush units engaged around target_xy
+    rx1 = max(0, min(x1, tx) - 24)
+    ry1 = max(0, min(y1, ty) - 24)
+    rx2 = min(239, max(x2, tx) + 24)
+    ry2 = min(239, max(y2, ty) + 24)
+
+    t_elite_leash = tm.add_trigger(
+        name=f"Enc_{name_prefix}_EliteLeash",
+        enabled=False,
+        looping=True,
+    )
+    safe_call(t_elite_leash.new_condition.timer, timer=6)
+    for ai_p, unit_id in sorted(spawned_types_elite, key=lambda item: (item[0].value, item[1])):
+        safe_call(
+            t_elite_leash.new_effect.attack_move,
+            source_player=ai_p,
+            object_list_unit_id=unit_id,
+            area_x1=max(0, rx1 - 15),
+            area_y1=max(0, ry1 - 15),
+            area_x2=min(239, rx2 + 15),
+            area_y2=min(239, ry2 + 15),
+            location_x=tx,
+            location_y=ty,
+        )
+    safe_call(
+        t_elite.new_effect.activate_trigger,
+        trigger_id=t_elite_leash.trigger_id,
+    )
+
+    # 4. Separate reward trigger: requires that trigger_player still holds the sector with >= 1 Military unit
+    # AND all spawned elite ambush units are genuinely dead (own_fewer_objects quantity=0 + local inverted check).
+    # Simply kiting an elite unit outside the combat box will NEVER grant the reward while the unit lives!
+    t_elite_reward = tm.add_trigger(
+        name=f"Enc_{name_prefix}_EliteDefeatedReward",
+        enabled=False,
+        looping=False,
+    )
+    safe_call(
+        t_elite.new_effect.activate_trigger,
+        trigger_id=t_elite_reward.trigger_id,
+    )
+    safe_call(t_elite_reward.new_condition.timer, timer=15)
+    safe_call(
+        t_elite_reward.new_condition.objects_in_area,
+        source_player=trigger_player,
+        object_type=OBJECT_TYPE_MILITARY,
+        area_x1=rx1,
+        area_y1=ry1,
+        area_x2=rx2,
+        area_y2=ry2,
+        quantity=1,
+    )
+    for ai_p, unit_id in sorted(spawned_types_elite, key=lambda item: (item[0].value, item[1])):
+        safe_call(
+            t_elite_reward.new_condition.own_fewer_objects,
+            source_player=ai_p,
+            object_list=unit_id,
+            quantity=0,
+        )
+        safe_call(
+            t_elite_reward.new_condition.objects_in_area,
+            source_player=ai_p,
+            object_list=unit_id,
+            area_x1=rx1,
+            area_y1=ry1,
+            area_x2=rx2,
+            area_y2=ry2,
+            quantity=1,
+            inverted=1,
+        )
+    safe_call(
+        t_elite_reward.new_effect.deactivate_trigger,
+        trigger_id=t_elite_leash.trigger_id,
+    )
+    award_glory_gold(
+        t_elite_reward,
+        BALANCE["glory_scores"]["elite_ambush_defeated"],
+        f"<GREEN>[Zasadzka Elitarna Rozbita!] Odwod wroga w sektorze {name_prefix} zostal calkowicie wybity (+200 Chwaly)!",
+    )
+
     return t_base, t_elite
 
 
@@ -331,27 +476,21 @@ def grant_soft_cap_reinforcements(
     tm: Any,
     phase_name: str,
     checkpoint_map: dict[PlayerId, tuple[int, int]],
+    bldg_offsets: dict[PlayerId, int] | None = None,
 ) -> list[Any]:
-    """Create triggers that evaluate each player's army size (<15, 15..28, >28) and balance reinforcements."""
+    """Evaluate each player's total military army (0..14, 15..28, 29+) using object_type=OBJECT_TYPE_MILITARY."""
+    _ = bldg_offsets  # Unused: object_type=OBJECT_TYPE_MILITARY naturally excludes buildings, walls, and revealers
     created_triggers: list[Any] = []
-    primary_unit_by_player: dict[PlayerId, int] = {
-        PlayerId.ONE: UNIT_HAMMER_SMITH_ID,
-        PlayerId.TWO: UNIT_FOUNTAIN_GUARD_ID,
-        PlayerId.THREE: UNIT_FLOWER_BLADE_ID,
-        PlayerId.FOUR: UNIT_TREE_PIKE_ID,
-    }
-    secondary_unit_by_player: dict[PlayerId, int] = {
-        PlayerId.ONE: UNIT_WING_GUARD_ID,
-        PlayerId.TWO: UNIT_ARCH_LONGBOW_ID,
-        PlayerId.THREE: UNIT_SWALLOW_SNIPER_ID,
-        PlayerId.FOUR: UNIT_TREE_SLINGER_ID,
-    }
+
+    crit_thresh = BALANCE["soft_cap_critical_threshold"]  # 15 -> Critical is <= 14 (0..14)
+    dom_thresh = BALANCE["soft_cap_dominance_threshold"]  # 28 -> Standard is 15..28; Dominance is >= 29
 
     for p_id in HUMAN_PLAYERS:
         cx, cy = checkpoint_map[p_id]
-        u_main = primary_unit_by_player[p_id]
-        u_sec = secondary_unit_by_player[p_id]
+        u_main = PRIMARY_RETINUE_UNIT_BY_PLAYER[p_id]
+        u_sec = SECONDARY_RETINUE_UNIT_BY_PLAYER[p_id]
 
+        # 1. Critical Rescue Pack: 0..14 total military units (own_fewer_objects <= 14, no object_list!)
         t_crit = tm.add_trigger(
             name=f"SoftCap_{phase_name}_P{p_id.value}_Critical",
             enabled=False,
@@ -360,7 +499,8 @@ def grant_soft_cap_reinforcements(
         safe_call(
             t_crit.new_condition.own_fewer_objects,
             source_player=p_id,
-            quantity=BALANCE["soft_cap_critical_threshold"],
+            object_type=OBJECT_TYPE_MILITARY,
+            quantity=crit_thresh - 1,
         )
         for i in range(8):
             safe_call(
@@ -378,13 +518,16 @@ def grant_soft_cap_reinforcements(
                 location_x=cx + (i % 3) - 1,
                 location_y=cy + 2 + (i // 3),
             )
+        apply_unit_lore_name(t_crit, p_id, u_main)
+        apply_unit_lore_name(t_crit, p_id, u_sec)
         safe_call(
             t_crit.new_effect.send_chat,
             source_player=p_id,
-            message=f"<YELLOW>[Przegrupowanie {phase_name}] Twoj poczet poniosl ciezkie straty - Gwardia Krolewska uzupelnia szeregi (+14 jednostek)!",
+            message=f"<YELLOW>[Przegrupowanie {phase_name}] Twoja armia liczyla ponizej 15 wojownikow - Gwardia Krolewska uzupelnia szeregi (+14 jednostek)!",
         )
         created_triggers.append(t_crit)
 
+        # 2. Standard Reserve Pack: 15..28 total military units (>= 15 AND <= 28, no object_list!)
         t_std = tm.add_trigger(
             name=f"SoftCap_{phase_name}_P{p_id.value}_Standard",
             enabled=False,
@@ -393,7 +536,14 @@ def grant_soft_cap_reinforcements(
         safe_call(
             t_std.new_condition.own_objects,
             source_player=p_id,
-            quantity=BALANCE["soft_cap_critical_threshold"],
+            object_type=OBJECT_TYPE_MILITARY,
+            quantity=crit_thresh,
+        )
+        safe_call(
+            t_std.new_condition.own_fewer_objects,
+            source_player=p_id,
+            object_type=OBJECT_TYPE_MILITARY,
+            quantity=dom_thresh,
         )
         for i in range(4):
             safe_call(
@@ -411,8 +561,11 @@ def grant_soft_cap_reinforcements(
                 location_x=cx + i - 1,
                 location_y=cy + 2,
             )
+        apply_unit_lore_name(t_std, p_id, u_main)
+        apply_unit_lore_name(t_std, p_id, u_sec)
         created_triggers.append(t_std)
 
+        # 3. Dominance Bonus: >= 29 total military units (own_objects >= 29, no object_list!)
         t_dom = tm.add_trigger(
             name=f"SoftCap_{phase_name}_P{p_id.value}_Dominance",
             enabled=False,
@@ -421,12 +574,13 @@ def grant_soft_cap_reinforcements(
         safe_call(
             t_dom.new_condition.own_objects,
             source_player=p_id,
-            quantity=BALANCE["soft_cap_dominance_threshold"],
+            object_type=OBJECT_TYPE_MILITARY,
+            quantity=dom_thresh + 1,
         )
         award_glory_gold(
             t_dom,
             150,
-            f"<AQUA>[Wzorowe Dowodzenie - P{p_id.value}] Niskie straty w {phase_name}: +150 Punktow Chwaly i +15 HP dla oddzialow!",
+            f"<AQUA>[Wzorowe Dowodzenie - P{p_id.value}] Ponad 28 jednostek wojskowych w {phase_name}: +150 Punktow Chwaly i +15 HP dla oddzialow!",
         )
         for u_id in (u_main, u_sec):
             safe_call(
@@ -437,13 +591,23 @@ def grant_soft_cap_reinforcements(
                 operation=Operation.ADD,
                 quantity=15,
             )
+
+        # Mutual lockouts: prevent units spawned by Critical/Standard from cascading into higher branches in the same tick!
+        for t_branch in (t_crit, t_std, t_dom):
+            for t_other in (t_crit, t_std, t_dom):
+                if t_other.trigger_id != t_branch.trigger_id:
+                    safe_call(
+                        t_branch.new_effect.deactivate_trigger,
+                        trigger_id=t_other.trigger_id,
+                    )
+
         created_triggers.append(t_dom)
 
     return created_triggers
 
 
 def _setup_t_init_and_unit_scaling(tm: Any, ctx: dict[str, Any]) -> None:
-    """Rule 5.2: Research ages/techs at 0:01, then apply all RPG unit/hero stat mutations at 0:03."""
+    """Rule 5.2: Research ages/techs and apply lore names at 0:01, then apply RPG stat mutations at 0:03."""
     t_init_techs = tm.add_trigger(
         name="Init_01s_Techs_And_Names",
         enabled=True,
@@ -512,6 +676,7 @@ def _setup_t_init_and_unit_scaling(tm: Any, ctx: dict[str, Any]) -> None:
                 operation=Operation.SET,
             )
 
+    # Rename key Gondolin landmarks
     bldg_names: dict[str, str] = {
         "tower_of_turgon": "Wieza Krola Turgona (Amon Gwareth)",
         "royal_fountain_bldg": "Fontanna Krolewska Ectheliona",
@@ -542,6 +707,12 @@ def _setup_t_init_and_unit_scaling(tm: Any, ctx: dict[str, Any]) -> None:
                 message=label,
             )
 
+    # Apply Silmarillion lore names to all initial Heroes, Noldor Retinues, Refugees, and Enemy Forces
+    for u_id in UNIT_DISPLAY_NAMES:
+        for p_id in HUMAN_PLAYERS + AI_PLAYERS + [PlayerId.GAIA]:
+            apply_unit_lore_name(t_init_techs, p_id, u_id)
+
+    # Trigger at 0:03: Apply Noldor Elite Retinue, Hero, and Boss stat mutations
     t_init_stats = tm.add_trigger(
         name="Init_03s_RPG_Unit_And_Hero_Stats",
         enabled=True,
@@ -820,9 +991,10 @@ def _setup_t_init_and_unit_scaling(tm: Any, ctx: dict[str, Any]) -> None:
 
 
 def _setup_special_auras_and_hazards(tm: Any, ctx: dict[str, Any]) -> None:
-    """Set up Ecthelion's Fountain Aura, Rog's Wrath, Duilin's Vantage, and North Quarter Fire Hazards."""
+    """Set up Ecthelion's local Fountain Aura (heal_object), Rog's Wrath on Balrog entry, and North Fires."""
     sectors = ctx["sectors"]
 
+    # 1A. Ecthelion's Royal Fountain Water Damage against Balrogs/Gothmog (P7 military units only)
     fx1, fy1, fx2, fy2 = sectors["royal_fountain"]
     t_fountain_weaken = tm.add_trigger(
         name="Aura_Fountain_Weaken_Balrogs",
@@ -833,6 +1005,7 @@ def _setup_special_auras_and_hazards(tm: Any, ctx: dict[str, Any]) -> None:
     safe_call(
         t_fountain_weaken.new_condition.objects_in_area,
         source_player=PlayerId.SEVEN,
+        object_type=OBJECT_TYPE_MILITARY,
         area_x1=fx1,
         area_y1=fy1,
         area_x2=fx2,
@@ -848,17 +1021,72 @@ def _setup_special_auras_and_hazards(tm: Any, ctx: dict[str, Any]) -> None:
         area_y2=fy2,
         quantity=140,
     )
+
+    # 1B. Local Royal Fountain Healing Aura: uses native heal_object every 4s for military units in the basin
+    # (Works for both initial and future spawned units, strictly local to the fountain, never overheals!)
+    t_fountain_heal = tm.add_trigger(
+        name="Aura_Fountain_Local_Heal_Allies",
+        enabled=True,
+        looping=True,
+    )
+    safe_call(t_fountain_heal.new_condition.timer, timer=4)
     for p_id in HUMAN_PLAYERS:
         safe_call(
-            t_fountain_weaken.new_effect.damage_object,
+            t_fountain_heal.new_effect.heal_object,
             source_player=p_id,
+            object_type=OBJECT_TYPE_MILITARY,
             area_x1=fx1,
             area_y1=fy1,
             area_x2=fx2,
             area_y2=fy2,
-            quantity=-60,
+            quantity=BALANCE["fountain_local_heal_hp"],
         )
 
+    # When Ecthelion personally stands at the Royal Fountain, he empowers its local waters (+35 extra heal & +80 P7 dmg)
+    t_fountain_blessing = tm.add_trigger(
+        name="Aura_Fountain_Ecthelion_Blessing",
+        enabled=True,
+        looping=False,
+    )
+    safe_call(
+        t_fountain_blessing.new_condition.objects_in_area,
+        source_player=PlayerId.TWO,
+        object_list=HERO_ECTHELION_ID,
+        area_x1=fx1,
+        area_y1=fy1,
+        area_x2=fx2,
+        area_y2=fy2,
+        quantity=1,
+    )
+    t_fountain_empowered = tm.add_trigger(
+        name="Aura_Fountain_Empowered_Loop",
+        enabled=False,
+        looping=True,
+    )
+    safe_call(t_fountain_empowered.new_condition.timer, timer=4)
+    for p_id in HUMAN_PLAYERS:
+        safe_call(
+            t_fountain_empowered.new_effect.heal_object,
+            source_player=p_id,
+            object_type=OBJECT_TYPE_MILITARY,
+            area_x1=fx1,
+            area_y1=fy1,
+            area_x2=fx2,
+            area_y2=fy2,
+            quantity=35,
+        )
+    safe_call(
+        t_fountain_blessing.new_effect.activate_trigger,
+        trigger_id=t_fountain_empowered.trigger_id,
+    )
+    add_chat_and_flare(
+        t_fountain_blessing,
+        "<AQUA>[Muzyka Wody - P2] Ecthelion wzmocnil lokalna aure Fontanny Krolewskiej (+65 HP leczenia co 4s w basenie fontanny)!",
+        61,
+        61,
+    )
+
+    # 2. North Quarter Fire Hazard (Damages units in north_fire_zone until P2 opens the Aqueduct)
     nx1, ny1, nx2, ny2 = sectors["north_fire_zone"]
     t_north_fire = tm.add_trigger(
         name="Hazard_North_Avenue_Fires",
@@ -878,14 +1106,20 @@ def _setup_special_auras_and_hazards(tm: Any, ctx: dict[str, Any]) -> None:
         )
     ctx["north_fire_trigger_id"] = t_north_fire.trigger_id
 
+    # 3. P1 House of the Hammer: Wrath of Rog activates ONLY when a Balrog (P7 military unit) enters Gondolin!
     t_rog_wrath = tm.add_trigger(
         name="Aura_Rog_Wrath_Against_Balrogs",
         enabled=True,
         looping=False,
     )
     safe_call(
-        t_rog_wrath.new_condition.own_objects,
+        t_rog_wrath.new_condition.objects_in_area,
         source_player=PlayerId.SEVEN,
+        object_type=OBJECT_TYPE_MILITARY,
+        area_x1=16,
+        area_y1=16,
+        area_x2=104,
+        area_y2=114,
         quantity=1,
     )
     for u_id in (HERO_ROG_ID, UNIT_HAMMER_SMITH_ID):
@@ -900,12 +1134,12 @@ def _setup_special_auras_and_hazards(tm: Any, ctx: dict[str, Any]) -> None:
         )
     add_chat_and_flare(
         t_rog_wrath,
-        "<BLUE>[Gniew Domu Mlota] Widok Balrogow budzi furie kowali Roga (+6 Ataku przeciwko demonom Angbandu)!",
+        "<BLUE>[Gniew Domu Mlota] Balrog przekroczyl mury Gondolinu! Widok demona budzi furie kowali Roga (+6 Ataku)!",
     )
 
 
 def _setup_iron_dragon_corridor_spawners(tm: Any, ctx: dict[str, Any]) -> None:
-    """Spawn P6 Iron Dragons in North & East Avenues and loop Orc reinforcement drops while Dragons live."""
+    """Spawn P6 Iron Dragons in North & East Avenues and loop Orc drops filtered strictly by ENEMY_IRON_DRAGON_RAM_ID."""
     t_spawn_dragons = tm.add_trigger(
         name="P6_Spawn_Iron_Dragons_Phase1",
         enabled=True,
@@ -939,20 +1173,15 @@ def _setup_iron_dragon_corridor_spawners(tm: Any, ctx: dict[str, Any]) -> None:
             location_x=tx,
             location_y=ty,
         )
+    apply_unit_lore_name(t_spawn_dragons, PlayerId.SIX, ENEMY_IRON_DRAGON_RAM_ID)
+    apply_unit_lore_name(t_spawn_dragons, PlayerId.SIX, ENEMY_FIRE_DRAKE_ID)
 
-    for p_id in HUMAN_PLAYERS:
-        safe_call(
-            t_spawn_dragons.new_effect.send_chat,
-            source_player=p_id,
-            message="<ORANGE>[Zelazne Smoki Morgotha] Pancerne machiny P6 wtoczyly sie w Aleje Polnocna i Wschodnia! Zniszczcie je, aby zatrzymac zrzuty Orkow!",
-        )
-        safe_call(
-            t_spawn_dragons.new_effect.create_object,
-            source_player=p_id,
-            object_list_unit_id=FLARE_UNIT_ID,
-            location_x=61,
-            location_y=106,
-        )
+    add_chat_and_flare(
+        t_spawn_dragons,
+        "<ORANGE>[Zelazne Smoki Morgotha] Pancerne machiny P6 wtoczyly sie w Aleje Polnocna i Wschodnia! Zniszczcie je, aby zatrzymac zrzuty Orkow!",
+        61,
+        106,
+    )
 
     corridors = ctx["dragon_corridors"]
     for ave_name, zones in corridors.items():
@@ -965,9 +1194,11 @@ def _setup_iron_dragon_corridor_spawners(tm: Any, ctx: dict[str, Any]) -> None:
                 looping=True,
             )
             safe_call(t_drop.new_condition.timer, timer=32)
+            # Filter strictly by ENEMY_IRON_DRAGON_RAM_ID so P6 buildings or minor units never trigger Orc drops!
             safe_call(
                 t_drop.new_condition.objects_in_area,
                 source_player=PlayerId.SIX,
+                object_list=ENEMY_IRON_DRAGON_RAM_ID,
                 area_x1=zx1,
                 area_y1=zy1,
                 area_x2=zx2,
@@ -997,6 +1228,8 @@ def _setup_iron_dragon_corridor_spawners(tm: Any, ctx: dict[str, Any]) -> None:
                     location_x=cx - i,
                     location_y=cy - 1,
                 )
+            for u_id in (ENEMY_ORC_INFANTRY_ID, ENEMY_ORC_BRUTE_ID, ENEMY_ORC_CROSSBOW_ID):
+                apply_unit_lore_name(t_drop, PlayerId.FIVE, u_id)
             safe_call(
                 t_drop.new_effect.attack_move,
                 source_player=PlayerId.FIVE,
