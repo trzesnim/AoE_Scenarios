@@ -394,10 +394,13 @@ def _setup_three_seals_of_turgon(tm: Any, ctx: dict[str, Any]) -> dict[str, Any]
         (3, t_seals_1_ui, t_seals_0_ui),
     ]
 
+    all_heal_loops: dict[int, dict[str, Any]] = {1: {}, 2: {}, 3: {}}
+    all_heal_stops: dict[int, dict[str, Any]] = {1: {}, 2: {}, 3: {}}
+
     for st_num, old_ui, new_ui in ui_chain:
         grace_triggers_by_phase: dict[str, list[Any]] = {ph: [] for ph in phases}
-        heal_loop_by_phase: dict[str, Any] = {}
-        heal_stop_by_phase: dict[str, Any] = {}
+        heal_loop_by_phase = all_heal_loops[st_num]
+        heal_stop_by_phase = all_heal_stops[st_num]
 
         for ph in phases:
             mx, my = PHASE_MARKER_COORDS[ph]
@@ -542,6 +545,17 @@ def _setup_three_seals_of_turgon(tm: Any, ctx: dict[str, Any]) -> dict[str, Any]
                     t_curr.new_effect.activate_trigger,
                     trigger_id=new_ui.trigger_id,
                 )
+                # Deactivate any still-running 20s heal loops from earlier stages (prevents overlapping auras!)
+                for prev_st in range(1, st_num):
+                    for prev_ph in phases:
+                        safe_call(
+                            t_curr.new_effect.deactivate_trigger,
+                            trigger_id=all_heal_loops[prev_st][prev_ph].trigger_id,
+                        )
+                        safe_call(
+                            t_curr.new_effect.deactivate_trigger,
+                            trigger_id=all_heal_stops[prev_st][prev_ph].trigger_id,
+                        )
                 safe_call(
                     t_curr.new_effect.activate_trigger,
                     trigger_id=heal_loop_by_phase[ph].trigger_id,
@@ -615,6 +629,8 @@ def _setup_three_seals_of_turgon(tm: Any, ctx: dict[str, Any]) -> dict[str, Any]
                 trigger_id=t_next.trigger_id,
             )
 
+    ctx["_all_seal_heal_loops"] = all_heal_loops
+    ctx["_all_seal_heal_stops"] = all_heal_stops
     return {
         "glorfindel_stage_triggers": [
             t
@@ -818,7 +834,7 @@ def _setup_phase1_city_and_dilemmas(tm: Any, ctx: dict[str, Any]) -> list[Any]:
         (aq_x1 - 4, aq_y1 - 4, aq_x2 + 4, aq_y2 + 4),
         (84, 70),
         [(PlayerId.EIGHT, ENEMY_MOLE_TRAITOR_ID, 6, 84, 76)],
-        [(PlayerId.FIVE, ENEMY_ORC_BRUTE_ID, 5, 86, 78)],
+        [(PlayerId.EIGHT, ENEMY_ORC_BRUTE_ID, 5, 86, 78)],
         trigger_player=PlayerId.TWO,
     )
 
@@ -1228,6 +1244,9 @@ def _setup_phase2_gothmog_and_tumladen(
         quantity=0,
     )
     _switch_phase_marker(t_gothmog_slain, "phase1", "phase2")
+    for st_idx in (1, 2, 3):
+        safe_call(t_gothmog_slain.new_effect.deactivate_trigger, trigger_id=ctx["_all_seal_heal_loops"][st_idx]["phase1"].trigger_id)
+        safe_call(t_gothmog_slain.new_effect.deactivate_trigger, trigger_id=ctx["_all_seal_heal_stops"][st_idx]["phase1"].trigger_id)
 
     for old_ui in phase1_ui_triggers:
         safe_call(
@@ -1371,7 +1390,7 @@ def _setup_phase2_gothmog_and_tumladen(
         (120, 78, 142, 98),
         (128, 88),
         [(PlayerId.FIVE, ENEMY_DIRE_WOLF_ID, 10, 134, 88), (PlayerId.FIVE, ENEMY_WARG_RIDER_ID, 6, 136, 90)],
-        [(PlayerId.FIVE, ENEMY_WARG_RIDER_ID, 6, 140, 92)],
+        [(PlayerId.SIX, ENEMY_WARG_RIDER_ID, 6, 140, 92)],
         trigger_player=PlayerId.ONE,
     )
 
@@ -1405,7 +1424,7 @@ def _setup_phase2_gothmog_and_tumladen(
         (ra_x1 - 6, ra_y1 - 6, ra_x2 + 6, ra_y2 + 6),
         (145, 110),
         [(PlayerId.SEVEN, ENEMY_BALROG_BOSS_ID, 1, 145, 114), (PlayerId.FIVE, ENEMY_ORC_BRUTE_ID, 8, 145, 108)],
-        [(PlayerId.SEVEN, ENEMY_BALROG_BOSS_ID, 1, 148, 114)],
+        [(PlayerId.EIGHT, ENEMY_BALROG_BOSS_ID, 1, 148, 114)],
         trigger_player=PlayerId.ONE,
         trigger_unit_id=HERO_ROG_ID,
     )
@@ -1500,6 +1519,9 @@ def _setup_phase3_orfalch_and_cirith_victory(
         quantity=3,
     )
     _switch_phase_marker(t_start_p3, "phase2", "phase3")
+    for st_idx in (1, 2, 3):
+        safe_call(t_start_p3.new_effect.deactivate_trigger, trigger_id=ctx["_all_seal_heal_loops"][st_idx]["phase2"].trigger_id)
+        safe_call(t_start_p3.new_effect.deactivate_trigger, trigger_id=ctx["_all_seal_heal_stops"][st_idx]["phase2"].trigger_id)
 
     for old_ui in phase2_ui_triggers:
         safe_call(
@@ -1532,19 +1554,19 @@ def _setup_phase3_orfalch_and_cirith_victory(
         96,
     )
 
-    winch_configs: list[tuple[str, str, int, int, str]] = [
-        ("winch_bronze", "orfalch_gate_3", 206, 122, "Trzecia Brama (Brazowa)"),
-        ("winch_silver", "orfalch_gate_5", 202, 150, "Piata Brama (Srebrna)"),
-        ("winch_steel", "orfalch_gate_7", 190, 174, "Siodma Brama (Stalowa)"),
+    winch_configs: list[tuple[str, str, int, int, str, PlayerId, int, int]] = [
+        ("winch_bronze", "orfalch_gate_3", 206, 122, "Trzecia Brama (Brazowa)", PlayerId.FIVE, ENEMY_MOLE_TRAITOR_ID, 5),
+        ("winch_silver", "orfalch_gate_5", 202, 150, "Piata Brama (Srebrna)", PlayerId.SIX, ENEMY_MOLE_TRAITOR_ID, 5),
+        ("winch_steel", "orfalch_gate_7", 190, 174, "Siodma Brama (Stalowa)", PlayerId.SIX, ENEMY_BALROG_BOSS_ID, 1),
     ]
-    for w_key, g_key, gx, gy, g_label in winch_configs:
+    for w_key, g_key, gx, gy, g_label, el_p, el_u, el_cnt in winch_configs:
         create_escalating_encounter(
             tm,
             f"Orfalch_{g_key}",
             (gx - 8, gy - 8, gx + 8, gy + 8),
             (gx, gy),
             [(PlayerId.FIVE, ENEMY_ORC_BRUTE_ID, 7, gx, gy + 3), (PlayerId.FIVE, ENEMY_ORC_CROSSBOW_ID, 5, gx, gy + 5)],
-            [(PlayerId.SEVEN, ENEMY_BALROG_BOSS_ID, 1, gx, gy + 6)],
+            [(el_p, el_u, el_cnt, gx, gy + 6)],
             trigger_player=PlayerId.ONE,
         )
         t_winch = tm.add_trigger(
@@ -1658,12 +1680,22 @@ def _setup_phase3_orfalch_and_cirith_victory(
         198,
     )
 
-    # Dual explicit completion conditions for Glorfindel's Duel (Audit Item 7):
-    # Path A: Glorfindel holds the Duel Spur for 25s AND is still present on the Spur
+    # Dual explicit completion conditions for Glorfindel's Duel (Audit Items 7 & 18):
+    # Path A: Glorfindel continuously holds the Duel Spur for 25s (leaving the Spur resets the timer!)
     t_thorondor_hold = tm.add_trigger(
         name="P3_Finale_Thorondor_Hold25s",
         enabled=False,
         looping=False,
+    )
+    t_duel_left_spur = tm.add_trigger(
+        name="P3_Finale_Glorfindel_LeftSpur",
+        enabled=False,
+        looping=True,
+    )
+    t_duel_reenter_spur = tm.add_trigger(
+        name="P3_Finale_Glorfindel_ReenterSpur",
+        enabled=False,
+        looping=True,
     )
     # Path B: Canonical heroic sacrifice of Glorfindel after engaging the Balrog on the Spur
     t_thorondor_sacrifice = tm.add_trigger(
@@ -1677,6 +1709,7 @@ def _setup_phase3_orfalch_and_cirith_victory(
         enabled=False,
         looping=False,
     )
+    safe_call(t_thorondor.new_condition.timer, timer=1)
 
     safe_call(
         t_duel_engaged.new_effect.activate_trigger,
@@ -1684,10 +1717,68 @@ def _setup_phase3_orfalch_and_cirith_victory(
     )
     safe_call(
         t_duel_engaged.new_effect.activate_trigger,
+        trigger_id=t_duel_left_spur.trigger_id,
+    )
+    safe_call(
+        t_duel_engaged.new_effect.activate_trigger,
         trigger_id=t_thorondor_sacrifice.trigger_id,
     )
 
-    # Configure Path A (25s timer + Glorfindel still present on the Duel Spur)
+    # If Glorfindel steps off the Spur while alive, pause/reset Hold25s until he re-enters the Spur
+    safe_call(
+        t_duel_left_spur.new_condition.objects_in_area,
+        source_player=PlayerId.THREE,
+        object_list=HERO_GLORFINDEL_ID,
+        area_x1=dl_x1 - 2,
+        area_y1=dl_y1 - 2,
+        area_x2=dl_x2 + 2,
+        area_y2=dl_y2 + 2,
+        quantity=1,
+        inverted=1,
+    )
+    safe_call(
+        t_duel_left_spur.new_condition.own_objects,
+        source_player=PlayerId.THREE,
+        object_list=HERO_GLORFINDEL_ID,
+        quantity=1,
+    )
+    safe_call(
+        t_duel_left_spur.new_effect.deactivate_trigger,
+        trigger_id=t_thorondor_hold.trigger_id,
+    )
+    safe_call(
+        t_duel_left_spur.new_effect.activate_trigger,
+        trigger_id=t_duel_reenter_spur.trigger_id,
+    )
+    safe_call(
+        t_duel_left_spur.new_effect.deactivate_trigger,
+        trigger_id=t_duel_left_spur.trigger_id,
+    )
+
+    safe_call(
+        t_duel_reenter_spur.new_condition.objects_in_area,
+        source_player=PlayerId.THREE,
+        object_list=HERO_GLORFINDEL_ID,
+        area_x1=dl_x1 - 2,
+        area_y1=dl_y1 - 2,
+        area_x2=dl_x2 + 2,
+        area_y2=dl_y2 + 2,
+        quantity=1,
+    )
+    safe_call(
+        t_duel_reenter_spur.new_effect.activate_trigger,
+        trigger_id=t_thorondor_hold.trigger_id,
+    )
+    safe_call(
+        t_duel_reenter_spur.new_effect.activate_trigger,
+        trigger_id=t_duel_left_spur.trigger_id,
+    )
+    safe_call(
+        t_duel_reenter_spur.new_effect.deactivate_trigger,
+        trigger_id=t_duel_reenter_spur.trigger_id,
+    )
+
+    # Configure Path A (25s continuous timer + Glorfindel present on the Duel Spur)
     safe_call(t_thorondor_hold.new_condition.timer, timer=25)
     safe_call(
         t_thorondor_hold.new_condition.objects_in_area,
@@ -1704,6 +1795,14 @@ def _setup_phase3_orfalch_and_cirith_victory(
         trigger_id=t_thorondor_sacrifice.trigger_id,
     )
     safe_call(
+        t_thorondor_hold.new_effect.deactivate_trigger,
+        trigger_id=t_duel_left_spur.trigger_id,
+    )
+    safe_call(
+        t_thorondor_hold.new_effect.deactivate_trigger,
+        trigger_id=t_duel_reenter_spur.trigger_id,
+    )
+    safe_call(
         t_thorondor_hold.new_effect.activate_trigger,
         trigger_id=t_thorondor.trigger_id,
     )
@@ -1718,6 +1817,14 @@ def _setup_phase3_orfalch_and_cirith_victory(
     safe_call(
         t_thorondor_sacrifice.new_effect.deactivate_trigger,
         trigger_id=t_thorondor_hold.trigger_id,
+    )
+    safe_call(
+        t_thorondor_sacrifice.new_effect.deactivate_trigger,
+        trigger_id=t_duel_left_spur.trigger_id,
+    )
+    safe_call(
+        t_thorondor_sacrifice.new_effect.deactivate_trigger,
+        trigger_id=t_duel_reenter_spur.trigger_id,
     )
     add_chat_and_flare(
         t_thorondor_sacrifice,
@@ -1738,6 +1845,14 @@ def _setup_phase3_orfalch_and_cirith_victory(
     safe_call(
         t_thorondor.new_effect.deactivate_trigger,
         trigger_id=t_thorondor_sacrifice.trigger_id,
+    )
+    safe_call(
+        t_thorondor.new_effect.deactivate_trigger,
+        trigger_id=t_duel_left_spur.trigger_id,
+    )
+    safe_call(
+        t_thorondor.new_effect.deactivate_trigger,
+        trigger_id=t_duel_reenter_spur.trigger_id,
     )
     for ey in range(182, 222, 5):
         safe_call(

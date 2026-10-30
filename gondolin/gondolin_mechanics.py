@@ -389,8 +389,38 @@ def create_escalating_encounter(
         ty,
     )
 
-    # 3. Separate reward trigger: checks that trigger_player still has at least 1 Military unit holding
-    # the combat sector AND all spawned elite enemy unit types in the sector have been eliminated.
+    # 3. Camp Leash trigger keeping Elite Ambush units engaged around target_xy
+    rx1 = max(0, min(x1, tx) - 24)
+    ry1 = max(0, min(y1, ty) - 24)
+    rx2 = min(239, max(x2, tx) + 24)
+    ry2 = min(239, max(y2, ty) + 24)
+
+    t_elite_leash = tm.add_trigger(
+        name=f"Enc_{name_prefix}_EliteLeash",
+        enabled=False,
+        looping=True,
+    )
+    safe_call(t_elite_leash.new_condition.timer, timer=6)
+    for ai_p, unit_id in sorted(spawned_types_elite, key=lambda item: (item[0].value, item[1])):
+        safe_call(
+            t_elite_leash.new_effect.attack_move,
+            source_player=ai_p,
+            object_list_unit_id=unit_id,
+            area_x1=max(0, rx1 - 15),
+            area_y1=max(0, ry1 - 15),
+            area_x2=min(239, rx2 + 15),
+            area_y2=min(239, ry2 + 15),
+            location_x=tx,
+            location_y=ty,
+        )
+    safe_call(
+        t_elite.new_effect.activate_trigger,
+        trigger_id=t_elite_leash.trigger_id,
+    )
+
+    # 4. Separate reward trigger: requires that trigger_player still holds the sector with >= 1 Military unit
+    # AND all spawned elite ambush units are genuinely dead (own_fewer_objects quantity=0 + local inverted check).
+    # Simply kiting an elite unit outside the combat box will NEVER grant the reward while the unit lives!
     t_elite_reward = tm.add_trigger(
         name=f"Enc_{name_prefix}_EliteDefeatedReward",
         enabled=False,
@@ -400,11 +430,7 @@ def create_escalating_encounter(
         t_elite.new_effect.activate_trigger,
         trigger_id=t_elite_reward.trigger_id,
     )
-    safe_call(t_elite_reward.new_condition.timer, timer=25)
-    rx1 = max(0, min(x1, tx) - 24)
-    ry1 = max(0, min(y1, ty) - 24)
-    rx2 = min(239, max(x2, tx) + 24)
-    ry2 = min(239, max(y2, ty) + 24)
+    safe_call(t_elite_reward.new_condition.timer, timer=15)
     safe_call(
         t_elite_reward.new_condition.objects_in_area,
         source_player=trigger_player,
@@ -417,6 +443,12 @@ def create_escalating_encounter(
     )
     for ai_p, unit_id in sorted(spawned_types_elite, key=lambda item: (item[0].value, item[1])):
         safe_call(
+            t_elite_reward.new_condition.own_fewer_objects,
+            source_player=ai_p,
+            object_list=unit_id,
+            quantity=0,
+        )
+        safe_call(
             t_elite_reward.new_condition.objects_in_area,
             source_player=ai_p,
             object_list=unit_id,
@@ -427,10 +459,14 @@ def create_escalating_encounter(
             quantity=1,
             inverted=1,
         )
+    safe_call(
+        t_elite_reward.new_effect.deactivate_trigger,
+        trigger_id=t_elite_leash.trigger_id,
+    )
     award_glory_gold(
         t_elite_reward,
         BALANCE["glory_scores"]["elite_ambush_defeated"],
-        f"<GREEN>[Zasadzka Elitarna Rozbita!] Odwod wroga w sektorze {name_prefix} zostal pokonany (+200 Chwaly)!",
+        f"<GREEN>[Zasadzka Elitarna Rozbita!] Odwod wroga w sektorze {name_prefix} zostal calkowicie wybity (+200 Chwaly)!",
     )
 
     return t_base, t_elite
@@ -555,6 +591,16 @@ def grant_soft_cap_reinforcements(
                 operation=Operation.ADD,
                 quantity=15,
             )
+
+        # Mutual lockouts: prevent units spawned by Critical/Standard from cascading into higher branches in the same tick!
+        for t_branch in (t_crit, t_std, t_dom):
+            for t_other in (t_crit, t_std, t_dom):
+                if t_other.trigger_id != t_branch.trigger_id:
+                    safe_call(
+                        t_branch.new_effect.deactivate_trigger,
+                        trigger_id=t_other.trigger_id,
+                    )
+
         created_triggers.append(t_dom)
 
     return created_triggers
