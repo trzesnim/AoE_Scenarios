@@ -1,4 +1,4 @@
-"""Balance Sanctuary, 3 Seals of Turgon, Phase I-III Quests, Dilemmas, and Victory logic."""
+"""Balance Sanctuary, 3 Seals of Turgon (all 9 heroes), Phase I-III Quests, Dilemmas, and Victory logic."""
 
 from __future__ import annotations
 
@@ -13,6 +13,7 @@ from gondolin_config import (
     ATTR_ATTACK,
     ATTR_HIT_POINTS,
     ATTR_MAXIMUM_RANGE,
+    ATTR_REGENERATION_RATE,
     ATTR_SEARCH_RADIUS,
     BALANCE,
     ENEMY_BALROG_BOSS_ID,
@@ -28,18 +29,20 @@ from gondolin_config import (
     FALCON_ID,
     HERO_DUILIN_ID,
     HERO_EARENDIL_ID,
-    HERO_ECTHELION_ID,
     HERO_GLORFINDEL_ID,
     HERO_IDRIL_ID,
+    HERO_ROG_ID,
     HERO_TUOR_ID,
     HUMAN_PLAYERS,
+    PLAYER_ALL_COMBAT_UNITS,
+    PRIMARY_RETINUE_UNIT_BY_PLAYER,
     ROCK_CLIFF_ID,
     SANCTUARY_KING_ID,
+    TRACKED_NOLDOR_HEROES,
     UNIT_ARCH_LONGBOW_ID,
     UNIT_ARCH_RATTAN_ID,
     UNIT_EAGLE_VANGUARD_ID,
     UNIT_FLOWER_CAV_ID,
-    UNIT_FOUNTAIN_GUARD_ID,
     UNIT_FOUNTAIN_HALB_ID,
     UNIT_HAMMER_SMITH_ID,
     UNIT_REFUGEE_CART_ID,
@@ -63,14 +66,15 @@ from gondolin_mechanics import (
 
 
 def _setup_balance_sanctuary(tm: Any, ctx: dict[str, Any]) -> None:
-    """Configure the 5-level Balance Sanctuary (-2 to +2) with mutual lockouts and 2s Relays."""
+    """Configure the 5-level Balance Sanctuary (-2 to +2) with mutual lockouts and terminal +/-2 states."""
     sanc = ctx["sanctuary"]
     x1, y1, x2, y2 = sanc["x1"], sanc["y1"], sanc["x2"], sanc["y2"]
     cx, cy = sanc["cx"], sanc["cy"]
     hx1, hy1, hx2, hy2 = sanc["harder_area"]
     ex1, ey1, ex2, ey2 = sanc["easier_area"]
 
-    # Relays to respawn the Sanctuary King in the center after 2 seconds
+    # Relays to respawn the Sanctuary King in the center ONLY after Step 1 (+1 or -1)
+    # After Step 2 (+2 or -2), the King is removed permanently so no further triggers can fire.
     t_relay_h1 = tm.add_trigger(
         name="Sanctuary_Relay2s_Harder1",
         enabled=False,
@@ -85,21 +89,6 @@ def _setup_balance_sanctuary(tm: Any, ctx: dict[str, Any]) -> None:
         location_y=cy,
     )
     apply_unit_lore_name(t_relay_h1, PlayerId.ONE, SANCTUARY_KING_ID)
-
-    t_relay_h2 = tm.add_trigger(
-        name="Sanctuary_Relay2s_Harder2",
-        enabled=False,
-        looping=False,
-    )
-    safe_call(t_relay_h2.new_condition.timer, timer=2)
-    safe_call(
-        t_relay_h2.new_effect.create_object,
-        source_player=PlayerId.ONE,
-        object_list_unit_id=SANCTUARY_KING_ID,
-        location_x=cx,
-        location_y=cy,
-    )
-    apply_unit_lore_name(t_relay_h2, PlayerId.ONE, SANCTUARY_KING_ID)
 
     t_relay_e1 = tm.add_trigger(
         name="Sanctuary_Relay2s_Easier1",
@@ -116,22 +105,6 @@ def _setup_balance_sanctuary(tm: Any, ctx: dict[str, Any]) -> None:
     )
     apply_unit_lore_name(t_relay_e1, PlayerId.ONE, SANCTUARY_KING_ID)
 
-    t_relay_e2 = tm.add_trigger(
-        name="Sanctuary_Relay2s_Easier2",
-        enabled=False,
-        looping=False,
-    )
-    safe_call(t_relay_e2.new_condition.timer, timer=2)
-    safe_call(
-        t_relay_e2.new_effect.create_object,
-        source_player=PlayerId.ONE,
-        object_list_unit_id=SANCTUARY_KING_ID,
-        location_x=cx,
-        location_y=cy,
-    )
-    apply_unit_lore_name(t_relay_e2, PlayerId.ONE, SANCTUARY_KING_ID)
-
-    # Harder Step 1 (+1) and Step 2 (+2)
     t_hard_1 = tm.add_trigger(
         name="Sanctuary_Harder_Step1",
         enabled=True,
@@ -142,8 +115,6 @@ def _setup_balance_sanctuary(tm: Any, ctx: dict[str, Any]) -> None:
         enabled=False,
         looping=False,
     )
-
-    # Easier Step 1 (-1) and Step 2 (-2)
     t_easy_1 = tm.add_trigger(
         name="Sanctuary_Easier_Step1",
         enabled=True,
@@ -155,7 +126,7 @@ def _setup_balance_sanctuary(tm: Any, ctx: dict[str, Any]) -> None:
         looping=False,
     )
 
-    # Configure Harder Step 1 (+1: +1000 Glory)
+    # Harder Step 1 (+1: +1000 Glory)
     safe_call(
         t_hard_1.new_condition.objects_in_area,
         source_player=PlayerId.ONE,
@@ -198,7 +169,7 @@ def _setup_balance_sanctuary(tm: Any, ctx: dict[str, Any]) -> None:
         trigger_id=t_hard_2.trigger_id,
     )
 
-    # Configure Harder Step 2 (+2: total +2000 Glory from difficulty_plus_2)
+    # Harder Step 2 (+2: terminal state, total +2000 Glory from difficulty_plus_2)
     plus_2_delta = (
         BALANCE["glory_scores"]["difficulty_plus_2"]
         - BALANCE["glory_scores"]["difficulty_plus_1"]
@@ -230,14 +201,10 @@ def _setup_balance_sanctuary(tm: Any, ctx: dict[str, Any]) -> None:
     award_glory_gold(
         t_hard_2,
         plus_2_delta,
-        "<RED>[Sanktuarium Balansu +2 (Maksimum)] Sily Morgotha ponownie wzmocnione (lacznie +40 HP, +4 Ataku, +2000 Chwaly)!",
-    )
-    safe_call(
-        t_hard_2.new_effect.activate_trigger,
-        trigger_id=t_relay_h2.trigger_id,
+        "<RED>[Sanktuarium Balansu +2 (Maksimum)] Sily Morgotha ponownie wzmocnione (lacznie +40 HP, +4 Ataku, +2000 Chwaly)! Sanktuarium zamkniete.",
     )
 
-    # Configure Easier Step 1 (-1: -500 Glory)
+    # Easier Step 1 (-1: -500 Glory)
     safe_call(
         t_easy_1.new_condition.objects_in_area,
         source_player=PlayerId.ONE,
@@ -282,7 +249,7 @@ def _setup_balance_sanctuary(tm: Any, ctx: dict[str, Any]) -> None:
         trigger_id=t_easy_2.trigger_id,
     )
 
-    # Configure Easier Step 2 (-2: total -1000 Glory from difficulty_minus_2)
+    # Easier Step 2 (-2: terminal state, total -1000 Glory from difficulty_minus_2)
     minus_2_delta = (
         BALANCE["glory_scores"]["difficulty_minus_2"]
         - BALANCE["glory_scores"]["difficulty_minus_1"]
@@ -316,16 +283,12 @@ def _setup_balance_sanctuary(tm: Any, ctx: dict[str, Any]) -> None:
     award_glory_gold(
         t_easy_2,
         minus_2_delta,
-        "<GREEN>[Sanktuarium Balansu -2 (Minimum)] Pancerze wroga ponownie oslabione (lacznie -1000 Chwaly).",
-    )
-    safe_call(
-        t_easy_2.new_effect.activate_trigger,
-        trigger_id=t_relay_e2.trigger_id,
+        "<GREEN>[Sanktuarium Balansu -2 (Minimum)] Pancerze wroga ponownie oslabione (lacznie -1000 Chwaly). Sanktuarium zamkniete.",
     )
 
 
 def _setup_three_seals_of_turgon(tm: Any, ctx: dict[str, Any]) -> dict[str, Any]:
-    """Implement the 3 Seals of Turgon reserve system with quantity=0, 5s stage relays, and 20s shield."""
+    """Implement the 3 Seals of Turgon for all 9 Heroes with simultaneous-death grace recovery and native regen."""
     t_seals_ui = tm.add_trigger(
         name="UI_Seals_Of_Turgon_3",
         enabled=True,
@@ -362,18 +325,10 @@ def _setup_three_seals_of_turgon(tm: Any, ctx: dict[str, Any]) -> dict[str, Any]
     t_seals_0_ui.display_on_screen = 1
     t_seals_0_ui.description_order = 115
 
-    tracked_heroes: list[tuple[PlayerId, int, int, str]] = [
-        (PlayerId.ONE, HERO_TUOR_ID, UNIT_HAMMER_SMITH_ID, "Tuor"),
-        (PlayerId.TWO, HERO_ECTHELION_ID, UNIT_FOUNTAIN_GUARD_ID, "Ecthelion"),
-        (PlayerId.THREE, HERO_GLORFINDEL_ID, UNIT_SWALLOW_SNIPER_ID, "Glorfindel"),
-        (PlayerId.FOUR, HERO_IDRIL_ID, UNIT_TREE_PIKE_ID, "Idril Celebrindal"),
-        (PlayerId.FOUR, HERO_EARENDIL_ID, UNIT_TREE_PIKE_ID, "Maly Earendil"),
-    ]
-
     cp_p1 = ctx["checkpoints"]["phase1"]
     seal_stage_triggers: dict[int, list[Any]] = {1: [], 2: [], 3: [], 4: []}
 
-    # Arm Stage 1 only after 5 seconds so initialization at 0:00-0:03 is 100% complete
+    # Arm Stage 1 only after 5 seconds so initialization at 0:00-0:03 is complete
     t_arm_seals = tm.add_trigger(
         name="Seal_Arm_Stage1_At_05s",
         enabled=True,
@@ -382,14 +337,17 @@ def _setup_three_seals_of_turgon(tm: Any, ctx: dict[str, Any]) -> dict[str, Any]
     safe_call(t_arm_seals.new_condition.timer, timer=5)
 
     for stage in (1, 2, 3, 4):
-        for p_id, h_id, guard_id, h_name in tracked_heroes:
-            rx, ry = cp_p1[p_id]
+        for idx, (p_id, h_id, guard_id, h_name) in enumerate(TRACKED_NOLDOR_HEROES):
+            base_rx, base_ry = cp_p1[p_id]
+            # Offset second/third hero of the same player by 1 tile so respawns never stack on one tile
+            rx = base_rx + (idx % 3) - 1
+            ry = base_ry + (idx // 3) - 1
+
             t_loss = tm.add_trigger(
-                name=f"Seal_Stage{stage}_HeroLoss_{h_name}",
+                name=f"Seal_Stage{stage}_HeroLoss_{h_name.replace(' ', '_')}",
                 enabled=False,
                 looping=False,
             )
-            # CRITICAL FIX P0: quantity=0 means 0 living heroes of type h_id (hero died!)
             safe_call(
                 t_loss.new_condition.own_fewer_objects,
                 source_player=p_id,
@@ -418,9 +376,10 @@ def _setup_three_seals_of_turgon(tm: Any, ctx: dict[str, Any]) -> dict[str, Any]
                 award_glory_gold(
                     t_loss,
                     -BALANCE["glory_scores"]["seal_preserved_bonus"],
-                    f"<RED>[Pieczec Turgona #{stage} Zuzyta!] {h_name} padl w boju! Gwardia Krolewska odradza bohatera na Punkcie Zbornym z 20s oslona (-500 Chwaly).",
+                    f"<RED>[Pieczec Turgona #{stage} Zuzyta!] {h_name} padl w boju! Gwardia Krolewska odradza bohatera z 20s premia regeneracji (-500 Chwaly).",
                 )
             else:
+                # Stage 4: All 3 Seals exhausted -> Defeat via declare_victory(enabled=False)
                 add_chat_and_flare(
                     t_loss,
                     f"<RED>[UPADEK GONDOLINU] {h_name} polegl, a wszystkie 3 Pieczecie Rezerwy Turgona zostaly wyczerpane! Krolestwo upadlo.",
@@ -442,55 +401,98 @@ def _setup_three_seals_of_turgon(tm: Any, ctx: dict[str, Any]) -> dict[str, Any]
             trigger_id=t_s1.trigger_id,
         )
 
-    # Wire stage transitions via 5-second relay triggers + 20-second rally point protection shield
+    # Wire stage transitions:
+    # 1. Native ATTR_REGENERATION_RATE boost (+240 HP/min for 20s) instead of negative damage_object
+    # 2. 5-second Grace Window that also recovers any other hero killed in the same simultaneous blast
     ui_chain = [
         (1, t_seals_ui, t_seals_2_ui),
         (2, t_seals_2_ui, t_seals_1_ui),
         (3, t_seals_1_ui, t_seals_0_ui),
     ]
+    regen_boost = BALANCE["seal_shield_regen_bonus"]
+
     for st_num, old_ui, new_ui in ui_chain:
-        # 20s Protection Shield around Amon Gwareth rally point
-        t_shield = tm.add_trigger(
-            name=f"Seal_Stage{st_num}_ShieldAura",
-            enabled=False,
-            looping=True,
-        )
-        safe_call(t_shield.new_condition.timer, timer=2)
-        for hp_id in HUMAN_PLAYERS:
-            safe_call(
-                t_shield.new_effect.damage_object,
-                source_player=hp_id,
-                area_x1=52,
-                area_y1=50,
-                area_x2=70,
-                area_y2=70,
-                quantity=-45,
-            )
-        t_shield_off = tm.add_trigger(
-            name=f"Seal_Stage{st_num}_ShieldStop20s",
+        t_regen_on = tm.add_trigger(
+            name=f"Seal_Stage{st_num}_RegenBoostOn",
             enabled=False,
             looping=False,
         )
-        safe_call(t_shield_off.new_condition.timer, timer=20)
+        t_regen_off = tm.add_trigger(
+            name=f"Seal_Stage{st_num}_RegenBoostOff20s",
+            enabled=False,
+            looping=False,
+        )
+        safe_call(t_regen_off.new_condition.timer, timer=20)
+
+        for hp_id in HUMAN_PLAYERS:
+            for u_id in PLAYER_ALL_COMBAT_UNITS:
+                safe_call(
+                    t_regen_on.new_effect.modify_attribute,
+                    source_player=hp_id,
+                    object_list_unit_id=u_id,
+                    object_attributes=ATTR_REGENERATION_RATE,
+                    operation=Operation.ADD,
+                    quantity=regen_boost,
+                )
+                safe_call(
+                    t_regen_off.new_effect.modify_attribute,
+                    source_player=hp_id,
+                    object_list_unit_id=u_id,
+                    object_attributes=ATTR_REGENERATION_RATE,
+                    operation=Operation.SUBTRACT,
+                    quantity=regen_boost,
+                )
         safe_call(
-            t_shield_off.new_effect.deactivate_trigger,
-            trigger_id=t_shield.trigger_id,
+            t_regen_on.new_effect.activate_trigger,
+            trigger_id=t_regen_off.trigger_id,
         )
 
-        # 5-second relay before arming Stage N+1 (prevents single-tick cascade across stages!)
+        # Simultaneous-death grace triggers (active only during the 5s window before Stage N+1 arms)
+        grace_triggers: list[Any] = []
+        for idx, (p_id, h_id, _, h_name) in enumerate(TRACKED_NOLDOR_HEROES):
+            base_rx, base_ry = cp_p1[p_id]
+            rx = base_rx + (idx % 3) - 1
+            ry = base_ry + (idx // 3) - 1
+            t_grace = tm.add_trigger(
+                name=f"Seal_Stage{st_num}_GraceCoRespawn_{h_name.replace(' ', '_')}",
+                enabled=False,
+                looping=False,
+            )
+            safe_call(
+                t_grace.new_condition.own_fewer_objects,
+                source_player=p_id,
+                object_list=h_id,
+                quantity=0,
+            )
+            safe_call(
+                t_grace.new_effect.create_object,
+                source_player=p_id,
+                object_list_unit_id=h_id,
+                location_x=rx,
+                location_y=ry,
+            )
+            apply_unit_lore_name(t_grace, p_id, h_id)
+            grace_triggers.append(t_grace)
+
+        # 5-second relay before arming Stage N+1 (deactivates grace triggers and arms Stage N+1)
         t_stage_relay = tm.add_trigger(
             name=f"Seal_Relay_Stage{st_num}_To_Stage{st_num + 1}",
             enabled=False,
             looping=False,
         )
         safe_call(t_stage_relay.new_condition.timer, timer=5)
+        for t_gr in grace_triggers:
+            safe_call(
+                t_stage_relay.new_effect.deactivate_trigger,
+                trigger_id=t_gr.trigger_id,
+            )
         for t_next in seal_stage_triggers[st_num + 1]:
             safe_call(
                 t_stage_relay.new_effect.activate_trigger,
                 trigger_id=t_next.trigger_id,
             )
 
-        for t_curr in seal_stage_triggers[st_num]:
+        for hero_idx, t_curr in enumerate(seal_stage_triggers[st_num]):
             safe_call(
                 t_curr.new_effect.deactivate_trigger,
                 trigger_id=old_ui.trigger_id,
@@ -501,17 +503,17 @@ def _setup_three_seals_of_turgon(tm: Any, ctx: dict[str, Any]) -> dict[str, Any]
             )
             safe_call(
                 t_curr.new_effect.activate_trigger,
-                trigger_id=t_shield.trigger_id,
+                trigger_id=t_regen_on.trigger_id,
             )
-            safe_call(
-                t_curr.new_effect.activate_trigger,
-                trigger_id=t_shield_off.trigger_id,
-            )
-            for t_sibling in seal_stage_triggers[st_num]:
-                if t_sibling.trigger_id != t_curr.trigger_id:
+            for sibling_idx, t_sibling in enumerate(seal_stage_triggers[st_num]):
+                if sibling_idx != hero_idx:
                     safe_call(
                         t_curr.new_effect.deactivate_trigger,
                         trigger_id=t_sibling.trigger_id,
+                    )
+                    safe_call(
+                        t_curr.new_effect.activate_trigger,
+                        trigger_id=grace_triggers[sibling_idx].trigger_id,
                     )
             safe_call(
                 t_curr.new_effect.activate_trigger,
@@ -526,29 +528,30 @@ def _setup_three_seals_of_turgon(tm: Any, ctx: dict[str, Any]) -> dict[str, Any]
 
 
 def _setup_refugee_rescues(tm: Any, ctx: dict[str, Any]) -> None:
-    """Allow players to rescue the 6 stranded Noldor citizen/artisan groups for reinforcements & Glory."""
+    """Allow players to rescue the 6 stranded Noldor citizen groups filtered strictly by primary combat unit."""
     for rg in ctx["refugee_groups"]:
         rx, ry = rg["x"], rg["y"]
         r_player = rg["reward_player"]
         r_unit = rg["reward_unit"]
         r_count = rg["reward_count"]
         r_name = rg["name"]
+        detect_unit = PRIMARY_RETINUE_UNIT_BY_PLAYER[r_player]
 
         t_rescue = tm.add_trigger(
             name=f"Rescue_{rg['id']}",
             enabled=True,
             looping=False,
         )
-        # Require 2 objects if Player 1 is the rescuer so a lone Map Revealer cannot trigger rescue
-        req_qty = 2 if r_player == PlayerId.ONE else 1
+        # Filter strictly by the rescuer's primary combat unit so adjacent houses/buildings NEVER trigger rescue!
         safe_call(
             t_rescue.new_condition.objects_in_area,
             source_player=r_player,
+            object_list=detect_unit,
             area_x1=rx - 6,
             area_y1=ry - 6,
             area_x2=rx + 6,
             area_y2=ry + 6,
-            quantity=req_qty,
+            quantity=1,
         )
         safe_call(
             t_rescue.new_effect.remove_object,
@@ -612,7 +615,7 @@ def _setup_phase1_city_and_dilemmas(tm: Any, ctx: dict[str, Any]) -> list[Any]:
     )
     ui_q_snow = add_p1_objective(
         "UI_P1_Q_SnowTower",
-        "[P3 - Duilin] Wieza ze Sniegu: Wejdz na baszte na polnocy, by odslonic mape i zyskac +1 Zasiegu",
+        "[P3 - Duilin] Wieza ze Sniegu: Wejdz Duilinem na baszte na polnocy, by odslonic mape i zyskac +1 Zasiegu",
         102,
     )
     ui_q_trees = add_p1_objective(
@@ -661,11 +664,12 @@ def _setup_phase1_city_and_dilemmas(tm: Any, ctx: dict[str, Any]) -> list[Any]:
     safe_call(
         t_breach_caragdur.new_condition.objects_in_area,
         source_player=PlayerId.ONE,
+        object_list=UNIT_HAMMER_SMITH_ID,
         area_x1=cg_x1,
         area_y1=cg_y1,
         area_x2=cg_x2,
         area_y2=cg_y2,
-        quantity=2,
+        quantity=1,
     )
     safe_call(
         t_breach_caragdur.new_effect.remove_object,
@@ -718,6 +722,7 @@ def _setup_phase1_city_and_dilemmas(tm: Any, ctx: dict[str, Any]) -> list[Any]:
         (84, 70),
         [(PlayerId.EIGHT, ENEMY_MOLE_TRAITOR_ID, 6, 84, 76)],
         [(PlayerId.FIVE, ENEMY_ORC_BRUTE_ID, 5, 86, 78)],
+        trigger_player=PlayerId.TWO,
     )
 
     t_aqueduct_done = tm.add_trigger(
@@ -761,7 +766,7 @@ def _setup_phase1_city_and_dilemmas(tm: Any, ctx: dict[str, Any]) -> list[Any]:
         "<AQUA>[Wody Ectheliona!] P2 otworzyl sluzy Akweduktu! Pozary w Dzielnicy Polnocnej ugaszone, a fala wodna zalala fose i oslabila Zelazne Smoki P6 (+300 Chwaly)!",
     )
 
-    # Q3 [Individual P3 - Duilin]: Tower of Snow Vantage Point
+    # Q3 [Individual P3 - Duilin]: Tower of Snow Vantage Point (filtered strictly by HERO_DUILIN_ID!)
     sx1, sy1, sx2, sy2 = sectors["tower_of_snow"]
     t_snow_tower = tm.add_trigger(
         name="P1_Quest_SnowTower_Completed",
@@ -771,6 +776,7 @@ def _setup_phase1_city_and_dilemmas(tm: Any, ctx: dict[str, Any]) -> list[Any]:
     safe_call(
         t_snow_tower.new_condition.objects_in_area,
         source_player=PlayerId.THREE,
+        object_list=HERO_DUILIN_ID,
         area_x1=sx1,
         area_y1=sy1,
         area_x2=sx2,
@@ -781,9 +787,9 @@ def _setup_phase1_city_and_dilemmas(tm: Any, ctx: dict[str, Any]) -> list[Any]:
         t_snow_tower.new_effect.deactivate_trigger,
         trigger_id=ui_q_snow.trigger_id,
     )
-    # Place revealers outside encounter detection boxes (or owned by P3) to avoid P1 false triggers
+    # Spawn revealers for Player 1 (shared via Cartography; safe because all triggers filter by combat unit_id!)
     for rx, ry in [(61, 108), (94, 63), (24, 63), (92, 26)]:
-        spawn_progressive_revealer(t_snow_tower, rx, ry, player=PlayerId.THREE)
+        spawn_progressive_revealer(t_snow_tower, rx, ry, player=PlayerId.ONE)
     for p_id in (PlayerId.TWO, PlayerId.THREE):
         for r_id in (UNIT_ARCH_LONGBOW_ID, UNIT_ARCH_RATTAN_ID, UNIT_SWALLOW_SNIPER_ID, HERO_DUILIN_ID):
             safe_call(
@@ -805,7 +811,7 @@ def _setup_phase1_city_and_dilemmas(tm: Any, ctx: dict[str, Any]) -> list[Any]:
     award_glory_gold(
         t_snow_tower,
         BALANCE["glory_scores"]["side_quest_completed"],
-        "<GREEN>[Wzrok Jaskolki - P3] Strzelcy Duilina obsadzili Wieze ze Sniegu! Odkryto pozycje enklaw w miescie, a lucznicy P2/P3 zyskali +1 Zasiegu (+300 Chwaly)!",
+        "<GREEN>[Wzrok Jaskolki - P3] Duilin obsadzil Wieze ze Sniegu! Odkryto pozycje enklaw w miescie, a lucznicy P2/P3 zyskali +1 Zasiegu (+300 Chwaly)!",
     )
 
     # Q4 [Individual P4 - Idril]: Saplings of Glingal and Belthil
@@ -853,6 +859,8 @@ def _setup_phase1_city_and_dilemmas(tm: Any, ctx: dict[str, Any]) -> list[Any]:
         (28, 63),
         [(PlayerId.FIVE, ENEMY_ORC_BRUTE_ID, 7, 26, 76), (PlayerId.EIGHT, ENEMY_MOLE_TRAITOR_ID, 4, 24, 54)],
         [(PlayerId.SEVEN, ENEMY_BALROG_BOSS_ID, 1, 24, 78)],
+        trigger_player=PlayerId.ONE,
+        trigger_unit_id=HERO_ROG_ID,
     )
     ag_x1, ag_y1, ag_x2, ag_y2 = sectors["amon_gwareth"]
     t_forges_saved = tm.add_trigger(
@@ -921,10 +929,11 @@ def _setup_phase1_city_and_dilemmas(tm: Any, ctx: dict[str, Any]) -> list[Any]:
     t_mkt_base, _ = create_escalating_encounter(
         tm,
         "East_Market",
-        (mk_x1 - 4, mk_y1, mk_x2, mk_y2),
+        (mk_x1, mk_y1, mk_x2, mk_y2),
         (92, 63),
         [(PlayerId.FIVE, ENEMY_ORC_INFANTRY_ID, 10, 98, 66), (PlayerId.FIVE, ENEMY_ORC_CROSSBOW_ID, 6, 100, 60)],
         [(PlayerId.FIVE, ENEMY_WARG_RIDER_ID, 6, 102, 64)],
+        trigger_player=PlayerId.TWO,
     )
     for i in range(6):
         safe_call(
@@ -949,7 +958,7 @@ def _setup_phase1_city_and_dilemmas(tm: Any, ctx: dict[str, Any]) -> list[Any]:
         "<RED>[Enklawa B - Wielki Targ!] Odsiecz dotarla do garnizonu Penloda! +12 elitarnych halabardnikow i lucznikow dolacza do obrony (+300 Chwaly)!",
     )
 
-    # Enclave C (South-East): Court of Salgant & House of the Harp
+    # Enclave C (South-East): Court of Salgant & House of the Harp (filtered strictly by HERO_GLORFINDEL_ID!)
     hp_x1, hp_y1, hp_x2, hp_y2 = sectors["enclave_harp"]
     t_harp_saved = tm.add_trigger(
         name="P1_EnclaveC_Harp_Liberated",
@@ -959,6 +968,7 @@ def _setup_phase1_city_and_dilemmas(tm: Any, ctx: dict[str, Any]) -> list[Any]:
     safe_call(
         t_harp_saved.new_condition.objects_in_area,
         source_player=PlayerId.THREE,
+        object_list=HERO_GLORFINDEL_ID,
         area_x1=hp_x1,
         area_y1=hp_y1,
         area_x2=hp_x2,
@@ -981,7 +991,7 @@ def _setup_phase1_city_and_dilemmas(tm: Any, ctx: dict[str, Any]) -> list[Any]:
     award_glory_gold(
         t_harp_saved,
         BALANCE["glory_scores"]["side_quest_completed"],
-        "<GREEN>[Enklawa C - Dom Harfy!] Wojownicy Domu Harfy wypowiedzieli posluszenstwo tchorzliwemu Salgantowi! Jazda i Uzdrowiciele dolaczaja do P3 (+300 Chwaly)!",
+        "<GREEN>[Enklawa C - Dom Harfy!] Glorfindel dotarl do Dworu Harfy - wojownicy wypowiedzieli posluszenstwo Salgantowi! Jazda i Uzdrowiciele dolaczaja do P3 (+300 Chwaly)!",
     )
 
     return phase1_ui_triggers
@@ -996,7 +1006,6 @@ def _setup_phase2_gothmog_and_tumladen(
     sectors = ctx["sectors"]
     rocks = ctx["destructible_rocks"]
     q_bldgs = ctx["quest_buildings"]
-    bldg_offsets = ctx.get("player_bldg_counts", {})
 
     t_spawn_gothmog = tm.add_trigger(
         name="P1_Boss_Spawn_Gothmog_AmonGwareth",
@@ -1067,7 +1076,6 @@ def _setup_phase2_gothmog_and_tumladen(
         tm,
         "Faza_II",
         ctx["checkpoints"]["phase2"],
-        bldg_offsets=bldg_offsets,
     )
 
     phase2_ui_triggers: list[Any] = []
@@ -1146,9 +1154,9 @@ def _setup_phase2_gothmog_and_tumladen(
         t_gothmog_slain.new_effect.kill_object,
         selected_object_ids=[q_bldgs["tower_of_turgon"]["ref_id"]],
     )
-    # Spawn revealers at safe coordinates outside trigger detection zones (owned by P2)
+    # Spawn revealers for Player 1 (shared via Cartography; safe because all triggers filter by combat unit_id!)
     for rx, ry in [(95, 42), (95, 86), (116, 40), (116, 88), (174, 85)]:
-        spawn_progressive_revealer(t_gothmog_slain, rx, ry, player=PlayerId.TWO)
+        spawn_progressive_revealer(t_gothmog_slain, rx, ry, player=PlayerId.ONE)
 
     award_glory_gold(
         t_gothmog_slain,
@@ -1156,8 +1164,11 @@ def _setup_phase2_gothmog_and_tumladen(
         "<AQUA>[Upadek Gothmoga i Ostatni Rozkaz Turgona!] Ecthelion powalil Wladce Balrogow w wodach Fontanny! Wieza Turgona runela, blokujac poscig. Tajemna Sciezka Idril (Dol) oraz Furta na Tumladen (Gora) sa otwarte (+500 Chwaly)!",
     )
 
-    # Dismiss the persistent Phase II Dilemma banner only AFTER a squad (>= 3 units) commits to a route
-    for route_name, r_sec in [("Lower", sectors["lower_mine_1"]), ("Upper", sectors["upper_cliff_1"])]:
+    # Dismiss the persistent Phase II Dilemma banner only AFTER a combat squad commits to a route
+    for route_name, r_sec, r_player, r_unit in [
+        ("Lower", sectors["lower_mine_1"], PlayerId.FOUR, UNIT_TREE_PIKE_ID),
+        ("Upper", sectors["upper_cliff_1"], PlayerId.ONE, UNIT_HAMMER_SMITH_ID),
+    ]:
         rx1, ry1, rx2, ry2 = r_sec
         t_hide_dilemma = tm.add_trigger(
             name=f"P2_Hide_Dilemma_On_{route_name}",
@@ -1166,19 +1177,20 @@ def _setup_phase2_gothmog_and_tumladen(
         )
         safe_call(
             t_hide_dilemma.new_condition.objects_in_area,
-            source_player=PlayerId.ONE,
+            source_player=r_player,
+            object_list=r_unit,
             area_x1=rx1 - 10,
             area_y1=ry1 - 10,
             area_x2=rx2 + 10,
             area_y2=ry2 + 10,
-            quantity=3,
+            quantity=2,
         )
         safe_call(
             t_hide_dilemma.new_effect.deactivate_trigger,
             trigger_id=ui_p2_dilemma.trigger_id,
         )
 
-    # Lower Route Co-op Mechanics: Collapsing Tunnel & Detonating Under-Mines
+    # Lower Route Co-op Mechanics: Collapsing Tunnel & Detonating Under-Mines (filtered by P4 units)
     tun_x1, tun_y1, tun_x2, tun_y2 = sectors["idril_tunnel_entrance"]
     t_collapse_tunnel = tm.add_trigger(
         name="P2_Idril_Collapses_Tunnel_Behind",
@@ -1188,6 +1200,7 @@ def _setup_phase2_gothmog_and_tumladen(
     safe_call(
         t_collapse_tunnel.new_condition.objects_in_area,
         source_player=PlayerId.FOUR,
+        object_list=HERO_IDRIL_ID,
         area_x1=tun_x1 + 12,
         area_y1=tun_y1 - 12,
         area_x2=tun_x2 + 25,
@@ -1222,6 +1235,7 @@ def _setup_phase2_gothmog_and_tumladen(
         safe_call(
             t_mine.new_condition.objects_in_area,
             source_player=PlayerId.FOUR,
+            object_list=UNIT_TREE_PIKE_ID,
             area_x1=mx1,
             area_y1=my1,
             area_x2=mx2,
@@ -1260,6 +1274,7 @@ def _setup_phase2_gothmog_and_tumladen(
         (128, 88),
         [(PlayerId.FIVE, ENEMY_DIRE_WOLF_ID, 10, 134, 88), (PlayerId.FIVE, ENEMY_WARG_RIDER_ID, 6, 136, 90)],
         [(PlayerId.FIVE, ENEMY_WARG_RIDER_ID, 6, 140, 92)],
+        trigger_player=PlayerId.ONE,
     )
 
     t_cliffs_cleared = tm.add_trigger(
@@ -1293,6 +1308,8 @@ def _setup_phase2_gothmog_and_tumladen(
         (145, 110),
         [(PlayerId.SEVEN, ENEMY_BALROG_BOSS_ID, 1, 145, 114), (PlayerId.FIVE, ENEMY_ORC_BRUTE_ID, 8, 145, 108)],
         [(PlayerId.SEVEN, ENEMY_BALROG_BOSS_ID, 1, 148, 114)],
+        trigger_player=PlayerId.ONE,
+        trigger_unit_id=HERO_ROG_ID,
     )
     t_altar_destroyed = tm.add_trigger(
         name="P2_Quest_RogAltar_Completed",
@@ -1334,13 +1351,11 @@ def _setup_phase3_orfalch_and_cirith_victory(
     sectors = ctx["sectors"]
     rocks = ctx["destructible_rocks"]
     q_bldgs = ctx["quest_buildings"]
-    bldg_offsets = ctx.get("player_bldg_counts", {})
 
     p3_softcap_trigs = grant_soft_cap_reinforcements(
         tm,
         "Faza_III",
         ctx["checkpoints"]["phase3"],
-        bldg_offsets=bldg_offsets,
     )
 
     phase3_ui_triggers: list[Any] = []
@@ -1375,15 +1390,16 @@ def _setup_phase3_orfalch_and_cirith_victory(
         enabled=True,
         looping=False,
     )
-    # Require >= 4 P1 units in Orfalch Gathering so no stray Revealer can prematurely start Phase III
+    # Filter strictly by P1's combat unit (UNIT_HAMMER_SMITH_ID) so no Map Revealer can start Phase III
     safe_call(
         t_start_p3.new_condition.objects_in_area,
         source_player=PlayerId.ONE,
+        object_list=UNIT_HAMMER_SMITH_ID,
         area_x1=og_x1,
         area_y1=og_y1,
         area_x2=og_x2,
         area_y2=og_y2,
-        quantity=4,
+        quantity=2,
     )
     for old_ui in phase2_ui_triggers:
         safe_call(
@@ -1406,9 +1422,9 @@ def _setup_phase3_orfalch_and_cirith_victory(
             t_start_p3.new_effect.remove_object,
             selected_object_ids=rocks[g_auto],
         )
-    # Place revealers owned by P3 outside the Sirion victory box (218..232, 216..230)
-    for rx, ry in [(190, 114), (204, 144), (180, 172), (198, 198), (214, 214)]:
-        spawn_progressive_revealer(t_start_p3, rx, ry, player=PlayerId.THREE)
+    # Place revealers for Player 1 outside the Duel Spur (198, 198) and outside Sirion Exit (218..232, 216..230)
+    for rx, ry in [(190, 114), (204, 144), (180, 172), (188, 198), (212, 214)]:
+        spawn_progressive_revealer(t_start_p3, rx, ry, player=PlayerId.ONE)
 
     add_chat_and_flare(
         t_start_p3,
@@ -1430,6 +1446,7 @@ def _setup_phase3_orfalch_and_cirith_victory(
             (gx, gy),
             [(PlayerId.FIVE, ENEMY_ORC_BRUTE_ID, 7, gx, gy + 3), (PlayerId.FIVE, ENEMY_ORC_CROSSBOW_ID, 5, gx, gy + 5)],
             [(PlayerId.SEVEN, ENEMY_BALROG_BOSS_ID, 1, gx, gy + 6)],
+            trigger_player=PlayerId.ONE,
         )
         t_winch = tm.add_trigger(
             name=f"P3_Winch_{w_key}_Destroyed",
@@ -1473,9 +1490,11 @@ def _setup_phase3_orfalch_and_cirith_victory(
         enabled=True,
         looping=False,
     )
+    # Strictly require HERO_GLORFINDEL_ID to enter Cirith Thoronath
     safe_call(
         t_ambush_cirith.new_condition.objects_in_area,
         source_player=PlayerId.THREE,
+        object_list=HERO_GLORFINDEL_ID,
         area_x1=ct_x1 - 4,
         area_y1=ct_y1 - 4,
         area_x2=ct_x2,
@@ -1514,7 +1533,7 @@ def _setup_phase3_orfalch_and_cirith_victory(
         198,
     )
 
-    # Require Glorfindel (or P3 force) to actually step onto the Duel Spur (192..204, 193..203) to engage the Balrog
+    # Strictly require HERO_GLORFINDEL_ID to step onto the Duel Spur (192..204, 193..203) to engage the Balrog
     t_duel_engaged = tm.add_trigger(
         name="P3_Finale_Glorfindel_Engages_Balrog",
         enabled=False,
@@ -1527,6 +1546,7 @@ def _setup_phase3_orfalch_and_cirith_victory(
     safe_call(
         t_duel_engaged.new_condition.objects_in_area,
         source_player=PlayerId.THREE,
+        object_list=HERO_GLORFINDEL_ID,
         area_x1=dl_x1 - 2,
         area_y1=dl_y1 - 2,
         area_x2=dl_x2 + 2,
@@ -1535,11 +1555,12 @@ def _setup_phase3_orfalch_and_cirith_victory(
     )
     add_chat_and_flare(
         t_duel_engaged,
-        "<YELLOW>[Pojedynek na Cirith Thoronath!] Glorfindel starl sie z Balrogiem nad odchłania! Utrzymajcie przelecz przez 25 sekund do przylotu Orlow Thorondora!",
+        "<YELLOW>[Pojedynek na Cirith Thoronath!] Glorfindel starl sie z Balrogiem nad odchlania! Utrzymajcie Wystep przez 25 sekund do przylotu Orlow Thorondora!",
         198,
         198,
     )
 
+    # Thorondor's Eagles arrive after 25s of Glorfindel holding the Duel Spur (or if Glorfindel sacrifices himself in the duel)
     t_thorondor = tm.add_trigger(
         name="P3_Finale_Thorondor_Eagles_Arrive",
         enabled=False,

@@ -36,15 +36,19 @@ from gondolin_config import (
     ENEMY_RANGED_UNITS,
     FLARE_UNIT_ID,
     HERO_DUILIN_ID,
+    HERO_ECTHELION_ID,
     HERO_EGALMOTH_ID,
     HERO_ROG_ID,
     HUMAN_PLAYERS,
     MAP_REVEALER_ID,
+    PLAYER_ALL_COMBAT_UNITS,
+    PRIMARY_RETINUE_UNIT_BY_PLAYER,
     RES_BONUS_POP_CAP,
     RES_FOOD,
     RES_GOLD,
     RES_STONE,
     RES_WOOD,
+    SECONDARY_RETINUE_UNIT_BY_PLAYER,
     TECH_BALLISTICS,
     TECH_BLAST_FURNACE,
     TECH_BODKIN_ARROW,
@@ -175,7 +179,7 @@ def spawn_progressive_revealer(
     y: int,
     player: PlayerId = PlayerId.ONE,
 ) -> None:
-    """Spawn a Map Revealer dynamically during gameplay to progressively lift Fog of War."""
+    """Spawn a Map Revealer dynamically during gameplay for Player 1 (shared via Cartography with P1-P4)."""
     safe_call(
         trig.new_effect.create_object,
         source_player=player,
@@ -260,25 +264,33 @@ def create_escalating_encounter(
     base_spawns: list[tuple[PlayerId, int, int, int, int]],
     elite_spawns: list[tuple[PlayerId, int, int, int, int]],
     arm_at_start: bool = True,
+    trigger_player: PlayerId = PlayerId.ONE,
+    trigger_unit_id: int | None = None,
 ) -> tuple[Any, Any]:
-    """Create a 2-stage Closed-Loop encounter: 65% Base Wave + 35% Elite Ambush + Victory Reward Trigger."""
+    """Create a 2-stage Closed-Loop encounter filtered strictly by combat unit ID (immune to buildings/revealers)."""
     x1, y1, x2, y2 = sector
     tx, ty = target_xy
+    detect_unit_id = (
+        trigger_unit_id
+        if trigger_unit_id is not None
+        else PRIMARY_RETINUE_UNIT_BY_PLAYER[trigger_player]
+    )
 
     t_base = tm.add_trigger(
         name=f"Enc_{name_prefix}_Base",
         enabled=arm_at_start,
         looping=False,
     )
-    # Require at least 2 P1 objects in area (so a lone Map Revealer cannot trip the ambush)
+    # Filter strictly by mobile combat unit ID so pre-existing buildings, carts, or Map Revealers NEVER trip it!
     safe_call(
         t_base.new_condition.objects_in_area,
-        source_player=PlayerId.ONE,
+        source_player=trigger_player,
+        object_list=detect_unit_id,
         area_x1=x1,
         area_y1=y1,
         area_x2=x2,
         area_y2=y2,
-        quantity=2,
+        quantity=1,
     )
 
     spawned_types_base: set[tuple[PlayerId, int]] = set()
@@ -319,19 +331,20 @@ def create_escalating_encounter(
     )
 
     # Mid-Encounter Escalation check after 20 seconds:
-    # Fires only if players still have a strong force in the sector (>= 8 units)
+    # Fires only if the player still has a strong frontline squad (>= 5 primary combat units) in the sector
     safe_call(
         t_elite.new_condition.timer,
         timer=BALANCE["mid_encounter_escalation_delay"],
     )
     safe_call(
         t_elite.new_condition.objects_in_area,
-        source_player=PlayerId.ONE,
-        area_x1=x1 - 8,
-        area_y1=y1 - 8,
-        area_x2=x2 + 8,
-        area_y2=y2 + 8,
-        quantity=8,
+        source_player=trigger_player,
+        object_list=detect_unit_id,
+        area_x1=max(0, x1 - 8),
+        area_y1=max(0, y1 - 8),
+        area_x2=min(239, x2 + 8),
+        area_y2=min(239, y2 + 8),
+        quantity=5,
     )
 
     spawned_types_elite: set[tuple[PlayerId, int]] = set()
@@ -368,7 +381,8 @@ def create_escalating_encounter(
         ty,
     )
 
-    # Separate trigger that awards Glory Gold ONLY AFTER the elite ambush units in the sector are defeated
+    # Separate reward trigger: awards Glory Gold ONLY AFTER all elite ambush unit types in the wide combat sector
+    # are eliminated AND the player's combat force still holds the sector.
     t_elite_reward = tm.add_trigger(
         name=f"Enc_{name_prefix}_EliteDefeatedReward",
         enabled=False,
@@ -378,11 +392,21 @@ def create_escalating_encounter(
         t_elite.new_effect.activate_trigger,
         trigger_id=t_elite_reward.trigger_id,
     )
-    safe_call(t_elite_reward.new_condition.timer, timer=12)
-    rx1 = max(0, min(x1, tx) - 12)
-    ry1 = max(0, min(y1, ty) - 12)
-    rx2 = min(239, max(x2, tx) + 12)
-    ry2 = min(239, max(y2, ty) + 12)
+    safe_call(t_elite_reward.new_condition.timer, timer=25)
+    rx1 = max(0, min(x1, tx) - 24)
+    ry1 = max(0, min(y1, ty) - 24)
+    rx2 = min(239, max(x2, tx) + 24)
+    ry2 = min(239, max(y2, ty) + 24)
+    safe_call(
+        t_elite_reward.new_condition.objects_in_area,
+        source_player=trigger_player,
+        object_list=detect_unit_id,
+        area_x1=rx1,
+        area_y1=ry1,
+        area_x2=rx2,
+        area_y2=ry2,
+        quantity=1,
+    )
     for ai_p, unit_id in sorted(spawned_types_elite, key=lambda item: (item[0].value, item[1])):
         safe_call(
             t_elite_reward.new_condition.objects_in_area,
@@ -410,31 +434,20 @@ def grant_soft_cap_reinforcements(
     checkpoint_map: dict[PlayerId, tuple[int, int]],
     bldg_offsets: dict[PlayerId, int] | None = None,
 ) -> list[Any]:
-    """Evaluate each player's living mobile army (<15, 15..28, >28) with mutually exclusive thresholds."""
+    """Evaluate each player's living primary combat unit count (<=7, 8..14, >=15) immune to building destruction."""
+    _ = bldg_offsets  # Preserved for backward signature compatibility; counting uses strict object_list!
     created_triggers: list[Any] = []
-    primary_unit_by_player: dict[PlayerId, int] = {
-        PlayerId.ONE: UNIT_HAMMER_SMITH_ID,
-        PlayerId.TWO: UNIT_FOUNTAIN_GUARD_ID,
-        PlayerId.THREE: UNIT_FLOWER_BLADE_ID,
-        PlayerId.FOUR: UNIT_TREE_PIKE_ID,
-    }
-    secondary_unit_by_player: dict[PlayerId, int] = {
-        PlayerId.ONE: UNIT_WING_GUARD_ID,
-        PlayerId.TWO: UNIT_ARCH_LONGBOW_ID,
-        PlayerId.THREE: UNIT_SWALLOW_SNIPER_ID,
-        PlayerId.FOUR: UNIT_TREE_SLINGER_ID,
-    }
 
-    crit_thresh = BALANCE["soft_cap_critical_threshold"]  # 15
-    dom_thresh = BALANCE["soft_cap_dominance_threshold"]  # 28
+    crit_max = BALANCE["soft_cap_primary_critical_max"]      # 7 primary units (~14 total mobile units)
+    std_max = BALANCE["soft_cap_primary_standard_max"]       # 14 primary units (~28 total mobile units)
+    dom_min = BALANCE["soft_cap_primary_dominance_min"]      # 15 primary units (> 28 total mobile units)
 
     for p_id in HUMAN_PLAYERS:
         cx, cy = checkpoint_map[p_id]
-        u_main = primary_unit_by_player[p_id]
-        u_sec = secondary_unit_by_player[p_id]
-        offset = (bldg_offsets or {}).get(p_id, 0)
+        u_main = PRIMARY_RETINUE_UNIT_BY_PLAYER[p_id]
+        u_sec = SECONDARY_RETINUE_UNIT_BY_PLAYER[p_id]
 
-        # 1. Critical Rescue Pack: strictly fewer than 15 mobile units (<= 14 + offset)
+        # 1. Critical Rescue Pack: 0..7 living primary combat units (own_fewer_objects <= 7)
         t_crit = tm.add_trigger(
             name=f"SoftCap_{phase_name}_P{p_id.value}_Critical",
             enabled=False,
@@ -443,7 +456,8 @@ def grant_soft_cap_reinforcements(
         safe_call(
             t_crit.new_condition.own_fewer_objects,
             source_player=p_id,
-            quantity=(crit_thresh - 1) + offset,
+            object_list=u_main,
+            quantity=crit_max,
         )
         for i in range(8):
             safe_call(
@@ -470,7 +484,7 @@ def grant_soft_cap_reinforcements(
         )
         created_triggers.append(t_crit)
 
-        # 2. Standard Reserve Pack: 15..28 mobile units (>= 15 + offset AND <= 28 + offset)
+        # 2. Standard Reserve Pack: 8..14 living primary combat units (>= 8 AND <= 14)
         t_std = tm.add_trigger(
             name=f"SoftCap_{phase_name}_P{p_id.value}_Standard",
             enabled=False,
@@ -479,12 +493,14 @@ def grant_soft_cap_reinforcements(
         safe_call(
             t_std.new_condition.own_objects,
             source_player=p_id,
-            quantity=crit_thresh + offset,
+            object_list=u_main,
+            quantity=crit_max + 1,
         )
         safe_call(
             t_std.new_condition.own_fewer_objects,
             source_player=p_id,
-            quantity=dom_thresh + offset,
+            object_list=u_main,
+            quantity=std_max,
         )
         for i in range(4):
             safe_call(
@@ -506,7 +522,7 @@ def grant_soft_cap_reinforcements(
         apply_unit_lore_name(t_std, p_id, u_sec)
         created_triggers.append(t_std)
 
-        # 3. Dominance Bonus: strictly more than 28 mobile units (>= 29 + offset)
+        # 3. Dominance Bonus: >= 15 living primary combat units
         t_dom = tm.add_trigger(
             name=f"SoftCap_{phase_name}_P{p_id.value}_Dominance",
             enabled=False,
@@ -515,7 +531,8 @@ def grant_soft_cap_reinforcements(
         safe_call(
             t_dom.new_condition.own_objects,
             source_player=p_id,
-            quantity=(dom_thresh + 1) + offset,
+            object_list=u_main,
+            quantity=dom_min,
         )
         award_glory_gold(
             t_dom,
@@ -921,9 +938,10 @@ def _setup_t_init_and_unit_scaling(tm: Any, ctx: dict[str, Any]) -> None:
 
 
 def _setup_special_auras_and_hazards(tm: Any, ctx: dict[str, Any]) -> None:
-    """Set up Ecthelion's Fountain Aura, Rog's Wrath, Duilin's Vantage, and North Quarter Fire Hazards."""
+    """Set up Ecthelion's Fountain Aura (non-overhealing!), Rog's Wrath, and North Quarter Fire Hazards."""
     sectors = ctx["sectors"]
 
+    # 1A. Ecthelion's Royal Fountain Water Damage against Balrogs/Gothmog (P7)
     fx1, fy1, fx2, fy2 = sectors["royal_fountain"]
     t_fountain_weaken = tm.add_trigger(
         name="Aura_Fountain_Weaken_Balrogs",
@@ -949,17 +967,42 @@ def _setup_special_auras_and_hazards(tm: Any, ctx: dict[str, Any]) -> None:
         area_y2=fy2,
         quantity=140,
     )
-    for p_id in HUMAN_PLAYERS:
-        safe_call(
-            t_fountain_weaken.new_effect.damage_object,
-            source_player=p_id,
-            area_x1=fx1,
-            area_y1=fy1,
-            area_x2=fx2,
-            area_y2=fy2,
-            quantity=-60,
-        )
 
+    # 1B. Ecthelion's Fountain Blessing for Allies: uses native ATTR_REGENERATION_RATE (+90 HP/min)
+    # instead of negative damage_object so units NEVER overheal above 100% Max HP!
+    t_fountain_blessing = tm.add_trigger(
+        name="Aura_Fountain_Ecthelion_Blessing",
+        enabled=True,
+        looping=False,
+    )
+    safe_call(
+        t_fountain_blessing.new_condition.objects_in_area,
+        source_player=PlayerId.TWO,
+        object_list=HERO_ECTHELION_ID,
+        area_x1=fx1,
+        area_y1=fy1,
+        area_x2=fx2,
+        area_y2=fy2,
+        quantity=1,
+    )
+    for p_id in HUMAN_PLAYERS:
+        for u_id in PLAYER_ALL_COMBAT_UNITS:
+            safe_call(
+                t_fountain_blessing.new_effect.modify_attribute,
+                source_player=p_id,
+                object_list_unit_id=u_id,
+                object_attributes=ATTR_REGENERATION_RATE,
+                operation=Operation.ADD,
+                quantity=BALANCE["fountain_ally_regen_bonus"],
+            )
+    add_chat_and_flare(
+        t_fountain_blessing,
+        "<AQUA>[Muzyka Wody - P2] Ecthelion poblogoslawil wody Fontanny Krolewskiej! Wszystkie oddzialy Noldorow zyskuja +90 HP/min regeneracji!",
+        61,
+        61,
+    )
+
+    # 2. North Quarter Fire Hazard (Damages units in north_fire_zone until P2 opens the Aqueduct)
     nx1, ny1, nx2, ny2 = sectors["north_fire_zone"]
     t_north_fire = tm.add_trigger(
         name="Hazard_North_Avenue_Fires",
@@ -979,6 +1022,7 @@ def _setup_special_auras_and_hazards(tm: Any, ctx: dict[str, Any]) -> None:
         )
     ctx["north_fire_trigger_id"] = t_north_fire.trigger_id
 
+    # 3. P1 House of the Hammer: Wrath of Rog when fighting Balrogs (P7)
     t_rog_wrath = tm.add_trigger(
         name="Aura_Rog_Wrath_Against_Balrogs",
         enabled=True,

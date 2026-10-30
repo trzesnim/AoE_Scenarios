@@ -1,4 +1,4 @@
-"""Configuration, constants, unit IDs, balance dictionary, and lore descriptions for Gondolin Co-op."""
+"""Configuration, constants, unit IDs, balance dictionary, and lore descriptions for Gondolin Co-op (Etap A)."""
 
 from __future__ import annotations
 
@@ -120,7 +120,7 @@ HERO_GLORFINDEL_ID: int = 172  # La Hire / Golden-haired Lord with broadsword
 HERO_DUILIN_ID: int = 428  # Hrolf the Ganger / Swallow Sniper Captain
 HERO_IDRIL_ID: int = 1292  # Queen (Idril Celebrindal)
 HERO_GALDOR_ID: int = 636  # Guy Josselyne / Tall Lord of the Tree
-HERO_EARENDIL_ID: int = 430  # Joan the Maid (Foot noble ward - replaces invalid 831 Turtle Ship!)
+HERO_EARENDIL_ID: int = 430  # Joan the Maid (Foot noble ward - replaces invalid 831 Turtle Ship)
 HERO_SALGANT_ID: int = 642  # William the Conqueror (Mounted Lord of the Harp)
 SANCTUARY_KING_ID: int = 434  # King unit isolated inside the Balance Sanctuary
 
@@ -149,6 +149,34 @@ UNIT_IDRIL_SAPPER_ID: int = 440  # Petard (demolition engineer)
 UNIT_REFUGEE_CART_ID: int = 128  # Trade Cart Empty (Mithril / Relic convoy)
 UNIT_REFUGEE_CIV_ID: int = 293  # Female Villager / Noldor Citizen (Gaia/P4)
 UNIT_EAGLE_VANGUARD_ID: int = 752  # Elite Eagle Warrior (Thorondor's Ground Strike)
+
+# Primary frontline unit per human player (used for clean object_list filtering in encounters & soft-cap)
+PRIMARY_RETINUE_UNIT_BY_PLAYER: dict[PlayerId, int] = {
+    PlayerId.ONE: UNIT_HAMMER_SMITH_ID,
+    PlayerId.TWO: UNIT_FOUNTAIN_GUARD_ID,
+    PlayerId.THREE: UNIT_FLOWER_BLADE_ID,
+    PlayerId.FOUR: UNIT_TREE_PIKE_ID,
+}
+
+SECONDARY_RETINUE_UNIT_BY_PLAYER: dict[PlayerId, int] = {
+    PlayerId.ONE: UNIT_WING_GUARD_ID,
+    PlayerId.TWO: UNIT_ARCH_LONGBOW_ID,
+    PlayerId.THREE: UNIT_SWALLOW_SNIPER_ID,
+    PlayerId.FOUR: UNIT_TREE_SLINGER_ID,
+}
+
+# All 9 Noldor Heroes tracked by the 3 Seals of Turgon (player, hero_id, guard_unit_id, display_short_name)
+TRACKED_NOLDOR_HEROES: list[tuple[PlayerId, int, int, str]] = [
+    (PlayerId.ONE, HERO_TUOR_ID, UNIT_HAMMER_SMITH_ID, "Tuor"),
+    (PlayerId.ONE, HERO_ROG_ID, UNIT_HAMMER_SMITH_ID, "Rog"),
+    (PlayerId.TWO, HERO_ECTHELION_ID, UNIT_FOUNTAIN_GUARD_ID, "Ecthelion"),
+    (PlayerId.TWO, HERO_EGALMOTH_ID, UNIT_ARCH_LONGBOW_ID, "Egalmoth"),
+    (PlayerId.THREE, HERO_GLORFINDEL_ID, UNIT_FLOWER_BLADE_ID, "Glorfindel"),
+    (PlayerId.THREE, HERO_DUILIN_ID, UNIT_SWALLOW_SNIPER_ID, "Duilin"),
+    (PlayerId.FOUR, HERO_IDRIL_ID, UNIT_TREE_PIKE_ID, "Idril Celebrindal"),
+    (PlayerId.FOUR, HERO_GALDOR_ID, UNIT_TREE_PIKE_ID, "Galdor"),
+    (PlayerId.FOUR, HERO_EARENDIL_ID, UNIT_TREE_PIKE_ID, "Maly Earendil"),
+]
 
 # Enemy Unit IDs (P5: Angband Horde, P6: Iron Dragons, P7: Balrogs, P8: Maeglin's Traitors)
 ENEMY_ORC_INFANTRY_ID: int = 1124  # Elite Karambit Warrior (swarming Orcs)
@@ -206,7 +234,7 @@ UNIT_DISPLAY_NAMES: dict[int, str] = {
     ENEMY_WARG_RIDER_ID: "Jezdziec Wargow",
     ENEMY_IRON_DRAGON_RAM_ID: "Zelazny Smok Morgotha",
     ENEMY_FIRE_DRAKE_ID: "Uruloki (Smok Ognisty)",
-    ENEMY_HEAVY_SCORPION_ID: "Balista Oblężnicza Angbandu",
+    ENEMY_HEAVY_SCORPION_ID: "Balista Obleznicza Angbandu",
     ENEMY_BALROG_BOSS_ID: "Balrog z Angbandu",
     ENEMY_GOTHMOG_ID: "Gothmog (Wladca Balrogow)",
     ENEMY_MOLE_TRAITOR_ID: "Gwardzista Domu Kreta (Zdrajca)",
@@ -243,6 +271,7 @@ PLAYER_ALL_COMBAT_UNITS: list[int] = [
     HERO_DUILIN_ID,
     HERO_IDRIL_ID,
     HERO_GALDOR_ID,
+    HERO_EARENDIL_ID,
     UNIT_HAMMER_SMITH_ID,
     UNIT_WING_GUARD_ID,
     UNIT_WING_CHAMPION_ID,
@@ -277,8 +306,11 @@ BALANCE: dict[str, Any] = {
     "starting_seals": 3,
     "out_of_combat_regen_per_min": 30,  # 0.5 HP/s passive recovery for Noldor units
     "hero_regen_per_min": 120,  # 2.0 HP/s regeneration for Heroes
-    "soft_cap_critical_threshold": 15,  # Below 15 units -> Emergency Rescue Pack
-    "soft_cap_dominance_threshold": 28,  # Above 28 units -> Glory Gold + Stat Buff instead of clutter
+    "fountain_ally_regen_bonus": 90,  # +1.5 HP/s regeneration near Royal Fountain (no overheal!)
+    "seal_shield_regen_bonus": 240,  # +4.0 HP/s regeneration for 20s after consuming a Seal
+    "soft_cap_primary_critical_max": 7,  # <= 7 primary units (~14 total) -> Critical Rescue Pack
+    "soft_cap_primary_standard_max": 14,  # 8..14 primary units (~15..28 total) -> Standard Pack
+    "soft_cap_primary_dominance_min": 15,  # >= 15 primary units (> 28 total) -> Dominance Bonus
     "mid_encounter_escalation_delay": 20,  # Seconds before checking if players crushed base wave
     "sanctuary_harder_hp_add": 20,
     "sanctuary_harder_atk_add": 2,
@@ -468,10 +500,12 @@ def populate_ingame_scenario_descriptions(scenario: Any) -> None:
         "Zajmowanie baszt i grani odslania mape i zasadzki wroga.\n"
         "- P4 (Zolty - Idril, Galdor i maly Earendil): Pikinierzy i saperzy. "
         "Otwiera tajne przejscia, wysadza podkopy i prowadzi uchodzcow.\n\n"
-        "2. BOHATEROWIE I 3 PIECZECIE REZERWY TURGONA:\n"
-        "- Wasi Bohaterowie sa potezni i regeneruja 2 HP/s, ale nie sa niesmiertelni.\n"
-        "- Jesli bohater zginie, druzyna zuzywa 1 Pieczec Rezerwy Turgona, a bohater odradza sie "
-        "z oddzialem ratunkowym na aktualnym Punkcie Zbornym. Utrata wszystkich Pieczeci = Porazka.\n\n"
+        "2. 9 BOHATEROW I 3 PIECZECIE REZERWY TURGONA:\n"
+        "- Wszystkich 9 Bohaterow (Tuor, Rog, Ecthelion, Egalmoth, Glorfindel, Duilin, Idril, Galdor, Earendil) "
+        "posiada regeneracje 2 HP/s, ale nie sa niesmiertelni.\n"
+        "- Jesli ktorykolwiek z 9 Bohaterow zginie, druzyna zuzywa 1 Pieczec Rezerwy Turgona, a polegly bohater "
+        "odradza sie z oddzialem ratunkowym i 20s premia regeneracji na Punkcie Zbornym aktualnej Fazy. "
+        "Utrata wszystkich 3 Pieczeci i smierc kolejnego bohatera = Porazka.\n\n"
         "3. PUNKTY CHWALY (ZLOTO):\n"
         "- Zloto Gracza 1 mierzy Wasz wynik (High Score) za uratowanych mieszkancow, zadania i zachowane Pieczecie."
     )
