@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any
 
 from AoE2ScenarioParser.datasets.players import PlayerId
 from AoE2ScenarioParser.scenarios.aoe2_de_scenario import AoE2DEScenario
@@ -10,6 +11,8 @@ from gondolin_config import (
     BALANCE,
     MAP_REVEALER_ID,
     MAP_SIZE,
+    OAK_TREE_ID,
+    PINE_TREE_ID,
     populate_ingame_scenario_descriptions,
 )
 from gondolin_map import build_map_and_entities
@@ -33,22 +36,30 @@ def find_scenario_folder() -> Path:
     return Path(__file__).parent
 
 
-def inspect_and_validate_scenario(output_path: Path) -> None:
-    """Re-read the generated .aoe2scenario file and print a diagnostic report for P1-P8 and 0:00 triggers."""
+def inspect_and_validate_scenario(output_path: Path, ctx: dict[str, Any] | None = None) -> None:
+    """Re-read the generated .aoe2scenario file and validate P1-P8, diplomacy, triggers, and object budgets."""
     reloaded = AoE2DEScenario.from_file(str(output_path))
     um = reloaded.unit_manager
     tm = reloaded.trigger_manager
     pm = reloaded.player_manager
 
-    print("\n" + "=" * 78)
-    print(f"RAPORT DIAGNOSTYCZNY WYGENEROWANEGO PLIKU: {output_path.name}")
-    print("=" * 78)
-    print(f"Rozmiar mapy: {reloaded.map_manager.map_size}x{reloaded.map_manager.map_size}")
-    print(f"Aktywni gracze (pm.active_players): {pm.active_players}")
-    print(f"Laczna liczba triggerow: {len(tm.triggers)}")
-    print("-" * 78)
-    print(f"{'Gracz':<12} | {'Rola':<10} | {'Wszystkie Obiekty':<18} | {'Bez Revealerow':<16} | {'Bohaterowie'}")
-    print("-" * 78)
+    if ctx is not None:
+        failed = ctx["grid"].failed_placements
+        if failed:
+            msg = f"[BLAD KRYTYCZNY SIATKI] Wykryto odrzucone placementy ({len(failed)}): {failed[:5]}"
+            raise RuntimeError(msg)
+
+    gaia_units = um.get_player_units(PlayerId.GAIA)
+    tree_count = sum(1 for u in gaia_units if u.unit_const in (OAK_TREE_ID, PINE_TREE_ID))
+
+    print("\n" + "=" * 82)
+    print(f"RAPORT WALIDACJI INTEGRACYJNEJ PLIKU: {output_path.name}")
+    print("=" * 82)
+    print(f"Rozmiar mapy: {reloaded.map_manager.map_size}x{reloaded.map_manager.map_size} | Aktywni gracze: {pm.active_players}")
+    print(f"Laczna liczba triggerow: {len(tm.triggers)} | Drzewa dekoracyjne Gaia: {tree_count}")
+    print("-" * 82)
+    print(f"{'Gracz':<12} | {'Rola':<10} | {'Wszystkie':<10} | {'Bez Revealerow':<15} | {'Bohaterowie'}")
+    print("-" * 82)
 
     hero_ids = set(BALANCE["heroes"].keys())
     for p_idx in range(1, 9):
@@ -58,33 +69,34 @@ def inspect_and_validate_scenario(output_path: Path) -> None:
         heroes_present = [u.unit_const for u in p_units if u.unit_const in hero_ids]
         role = "Czlowiek" if p_idx <= 4 else "AI (Wrog)"
         print(
-            f"P{p_idx} ({p_enum.name:<5}) | {role:<10} | {len(p_units):<18} | {len(non_rev):<16} | {heroes_present}"
+            f"P{p_idx} ({p_enum.name:<5}) | {role:<10} | {len(p_units):<10} | {len(non_rev):<15} | {heroes_present}"
         )
         if len(non_rev) == 0:
-            msg = f"[BLAD KRYTYCZNY P0] Gracz P{p_idx} ma 0 obiektow na starcie (zostanie wyeliminowany w 0:00)!"
+            msg = f"[BLAD KRYTYCZNY P0] Gracz P{p_idx} ma 0 obiektow na starcie!"
             raise RuntimeError(msg)
 
-    # Check enabled triggers at 0:00 for premature own_fewer_objects(quantity >= 1) on single heroes
+    # Validate active 0:00 triggers & ensure all objects_in_area conditions have object_list or object_type
     enabled_triggers = [t for t in tm.triggers if t.enabled]
-    for trig in enabled_triggers:
+    for trig in tm.triggers:
         for cond in trig.conditions:
-            c_type = getattr(cond, "condition_type", None)
             obj_list = getattr(cond, "object_list", -1)
+            obj_type = getattr(cond, "object_type", -1)
             qty = getattr(cond, "quantity", -1)
-            if obj_list in hero_ids and qty >= 1 and "HeroLoss" in trig.name:
-                msg = (
-                    f"[BLAD KRYTYCZNY P0] Trigger '{trig.name}' jest aktywny na starcie i sprawdza "
-                    f"bohatera ID={obj_list} z quantity={qty} (spowoduje natychmiastowe zużycie Pieczeci)!"
-                )
+            if trig.enabled and obj_list in hero_ids and qty >= 1 and "HeroLoss" in trig.name:
+                msg = f"[BLAD KRYTYCZNY P0] Trigger '{trig.name}' ma quantity={qty} dla bohatera na starcie!"
                 raise RuntimeError(msg)
+            if "objects_in_area" in str(getattr(cond, "condition_type", "")).lower():
+                if obj_list == -1 and obj_type == -1:
+                    msg = f"[BLAD KRYTYCZNY P0] Trigger '{trig.name}' ma niefiltrowane objects_in_area!"
+                    raise RuntimeError(msg)
 
-    print("-" * 78)
-    print(f"[WALIDACJA OK] Triggery aktywne w 0:00 ({len(enabled_triggers)}) przeszly kontrole bezpieczenstwa.")
-    print("=" * 78 + "\n")
+    print("-" * 82)
+    print(f"[WALIDACJA OK] 0 odrzuconych placementow, {len(enabled_triggers)} triggerow startowych bezpiecznych.")
+    print("=" * 82 + "\n")
 
 
 def generate_scenario() -> None:
-    """Load template.aoe2scenario from the AoE2: DE folder, build scenario, write output, and validate."""
+    """Load template.aoe2scenario, build Gondolin map/mechanics/quests, write output, and validate."""
     scenario_folder = find_scenario_folder()
     template_path = scenario_folder / TEMPLATE_FILENAME
     if not template_path.exists():
@@ -103,7 +115,6 @@ def generate_scenario() -> None:
     print(f"[INFO] Wczytywanie szablonu z: {template_path.resolve()}")
     scenario = AoE2DEScenario.from_file(str(template_path))
 
-    # Rule 1.2: Reset triggers, units, and map size on loaded template
     scenario.trigger_manager.triggers = []
     scenario.unit_manager.units = [[] for _ in range(9)]
     scenario.map_manager.map_size = MAP_SIZE
@@ -115,7 +126,7 @@ def generate_scenario() -> None:
 
     scenario.write_to_file(str(output_path))
     print(f"[OK] Wygenerowano scenariusz bezposrednio do folderu gry: {output_path.resolve()}")
-    inspect_and_validate_scenario(output_path)
+    inspect_and_validate_scenario(output_path, ctx=ctx)
 
 
 if __name__ == "__main__":
