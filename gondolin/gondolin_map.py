@@ -1,4 +1,4 @@
-"""Map generation, SafeMapGrid, elevation smoothing, Gondolin city architecture, and entity placement."""
+"""Map generation, SafeMapGrid (exact even/odd footprints), Gondolin walls/gates, and entity placement."""
 
 from __future__ import annotations
 
@@ -7,24 +7,21 @@ from typing import Any
 from AoE2ScenarioParser.datasets.players import PlayerId
 from AoE2ScenarioParser.datasets.terrains import TerrainId
 from gondolin_config import (
-    AI_PLAYERS,
     ARCHERY_RANGE_ID,
     BARRACKS_ID,
     BLACKSMITH_ID,
     CASTLE_ID,
+    CITY_GATE_NW_SE_ID,
+    CITY_GATE_SW_NE_ID,
     CYPRESS_TREE_ID,
     ENEMY_BALROG_BOSS_ID,
-    ENEMY_DIRE_WOLF_ID,
     ENEMY_FIRE_DRAKE_ID,
     ENEMY_HEAVY_SCORPION_ID,
     ENEMY_IRON_DRAGON_RAM_ID,
     ENEMY_MOLE_PIKE_ID,
     ENEMY_MOLE_TRAITOR_ID,
     ENEMY_ORC_ARCHER_ID,
-    ENEMY_ORC_BRUTE_ID,
-    ENEMY_ORC_CROSSBOW_ID,
     ENEMY_ORC_INFANTRY_ID,
-    FEITORIA_ID,
     FLAG_A_ID,
     FLAME_EFFECT_ID,
     FORTIFIED_WALL_ID,
@@ -72,15 +69,31 @@ from gondolin_config import (
     get_retinue_configs,
 )
 
+# Genie Engine DiplomacyState values (0=Ally, 1=Neutral, 3=Enemy)
+DIPLOMACY_ALLY: int = 0
+DIPLOMACY_ENEMY: int = 3
+
+
+def _set_writable_attr(obj: Any, attr: str, value: Any) -> None:
+    """Safely set an attribute on an object only if it is writable (avoids read-only property errors)."""
+    cls_attr = getattr(type(obj), attr, None)
+    if isinstance(cls_attr, property):
+        if cls_attr.fset is not None:
+            setattr(obj, attr, value)
+    elif hasattr(obj, attr):
+        setattr(obj, attr, value)
+
 
 class SafeMapGrid:
-    """Anti-collision grid tracking occupied tiles, road corridors, no-tree zones, and Lipschitz elevations."""
+    """Anti-collision grid with exact even/odd footprints, gate passability, and zero-failure enforcement."""
 
     def __init__(self, size: int = MAP_SIZE) -> None:
         self.size: int = size
         self.occupied_tiles: set[tuple[int, int]] = set()
+        self.gate_passable_tiles: set[tuple[int, int]] = set()
         self.road_corridors: set[tuple[int, int]] = set()
         self.no_tree_zones: set[tuple[int, int]] = set()
+        self.failed_placements: list[dict[str, Any]] = []
         self.terrain: list[list[int]] = [
             [TerrainId.GRASS_1 for _ in range(size)] for _ in range(size)
         ]
@@ -91,6 +104,23 @@ class SafeMapGrid:
     def in_bounds(self, x: int, y: int) -> bool:
         """Return True if tile coordinates lie inside the map grid."""
         return 0 <= x < self.size and 0 <= y < self.size
+
+    @staticmethod
+    def footprint_bounds(x: int, y: int, footprint: int) -> tuple[int, int, int, int]:
+        """Return exact (xmin, ymin, xmax, ymax) tile bounds for both odd (1, 3, 5) and even (2, 4) footprints."""
+        fp = max(1, footprint)
+        xmin = x - (fp - 1) // 2
+        ymin = y - (fp - 1) // 2
+        xmax = xmin + fp - 1
+        ymax = ymin + fp - 1
+        return xmin, ymin, xmax, ymax
+
+    @classmethod
+    def footprint_center(cls, x: int, y: int, footprint: int) -> tuple[float, float]:
+        """Return exact Genie Engine float coordinates (cx, cy) for the center of a footprint."""
+        xmin, ymin, _, _ = cls.footprint_bounds(x, y, footprint)
+        fp = max(1, footprint)
+        return float(xmin) + fp / 2.0, float(ymin) + fp / 2.0
 
     def mark_no_trees_box(self, x1: int, y1: int, x2: int, y2: int) -> None:
         """Protect a rectangular area from forest tree placement."""
@@ -109,17 +139,17 @@ class SafeMapGrid:
                 self.road_corridors.add((x, y))
                 self.no_tree_zones.add((x, y))
 
-    def can_place_footprint(
+    def can_place_rect(
         self,
-        x: int,
-        y: int,
-        footprint: int = 1,
+        xmin: int,
+        ymin: int,
+        xmax: int,
+        ymax: int,
         respect_roads: bool = True,
     ) -> bool:
-        """Return True if the footprint around (x, y) is free of occupied tiles (and road corridors)."""
-        half = footprint // 2
-        for ty in range(y - half, y + half + 1):
-            for tx in range(x - half, x + half + 1):
+        """Return True if all tiles in [xmin..xmax, ymin..ymax] are in-bounds and unoccupied."""
+        for ty in range(ymin, ymax + 1):
+            for tx in range(xmin, xmax + 1):
                 if not self.in_bounds(tx, ty):
                     return False
                 if (tx, ty) in self.occupied_tiles:
@@ -127,6 +157,17 @@ class SafeMapGrid:
                 if respect_roads and (tx, ty) in self.road_corridors:
                     return False
         return True
+
+    def can_place_footprint(
+        self,
+        x: int,
+        y: int,
+        footprint: int = 1,
+        respect_roads: bool = True,
+    ) -> bool:
+        """Return True if the exact footprint around (x, y) is free of occupied tiles (and road corridors)."""
+        xmin, ymin, xmax, ymax = self.footprint_bounds(x, y, footprint)
+        return self.can_place_rect(xmin, ymin, xmax, ymax, respect_roads=respect_roads)
 
     def mark_occupied_box(
         self,
@@ -136,7 +177,7 @@ class SafeMapGrid:
         y2: int,
         clear_trees_around: bool = True,
     ) -> None:
-        """Mark tiles as occupied by a structure or unit footprint."""
+        """Mark tiles in [x1..x2, y1..y2] as occupied by a structure or unit footprint."""
         xmin, xmax = max(0, min(x1, x2)), min(self.size - 1, max(x1, x2))
         ymin, ymax = max(0, min(y1, y2)), min(self.size - 1, max(y1, y2))
         for y in range(ymin, ymax + 1):
@@ -250,31 +291,92 @@ class SafeMapGrid:
         y: int,
         footprint: int = 1,
         clear_trees_around: bool = True,
+        allow_overlap: bool = False,
     ) -> Any:
-        """Place a unit or building on the grid and register its footprint."""
+        """Place a unit or building on the grid using exact even/odd footprint bounds."""
         cx = max(1, min(self.size - 2, x))
         cy = max(1, min(self.size - 2, y))
-        half = footprint // 2
+        xmin, ymin, xmax, ymax = self.footprint_bounds(cx, cy, footprint)
+        if not allow_overlap and not self.can_place_rect(
+            xmin, ymin, xmax, ymax, respect_roads=False
+        ):
+            self.failed_placements.append(
+                {
+                    "player": player,
+                    "unit_id": unit_id,
+                    "x": cx,
+                    "y": cy,
+                    "footprint": footprint,
+                    "reason": "occupied_tile_collision",
+                }
+            )
         self.mark_occupied_box(
-            cx - half,
-            cy - half,
-            cx + half,
-            cy + half,
+            xmin,
+            ymin,
+            xmax,
+            ymax,
             clear_trees_around=clear_trees_around,
         )
+        fx, fy = self.footprint_center(cx, cy, footprint)
         return um.add_unit(
             player=player,
             unit_const=unit_id,
-            x=float(cx) + 0.5,
-            y=float(cy) + 0.5,
+            x=fx,
+            y=fy,
         )
+
+    def place_gate_safe(
+        self,
+        um: Any,
+        player: PlayerId,
+        gate_id: int,
+        x: int,
+        y: int,
+        axis: str,
+    ) -> Any:
+        """Place a 4-tile stone gate along axis 'X' (4x1) or 'Y' (1x4) and mark its tiles passable for allies."""
+        if axis == "X":
+            xmin, ymin, xmax, ymax = x - 1, y, x + 2, y
+            fx, fy = float(x) + 1.0, float(y) + 0.5
+        else:
+            xmin, ymin, xmax, ymax = x, y - 1, x, y + 2
+            fx, fy = float(x) + 0.5, float(y) + 1.0
+
+        if not self.can_place_rect(xmin, ymin, xmax, ymax, respect_roads=False):
+            self.failed_placements.append(
+                {
+                    "player": player,
+                    "unit_id": gate_id,
+                    "x": x,
+                    "y": y,
+                    "footprint": 4,
+                    "reason": f"gate_{axis}_collision",
+                }
+            )
+        self.mark_occupied_box(xmin, ymin, xmax, ymax, clear_trees_around=True)
+        for ty in range(ymin, ymax + 1):
+            for tx in range(xmin, xmax + 1):
+                self.gate_passable_tiles.add((tx, ty))
+        return um.add_unit(
+            player=player,
+            unit_const=gate_id,
+            x=fx,
+            y=fy,
+        )
+
+    def is_tile_passable(self, x: int, y: int) -> bool:
+        """Return True if a mobile unit can walk across tile (x, y) (unoccupied or an allied gate)."""
+        if not self.in_bounds(x, y):
+            return False
+        if (x, y) in self.gate_passable_tiles:
+            return True
+        return (x, y) not in self.occupied_tiles
 
 
 def _configure_players_and_diplomacy(pm: Any) -> None:
-    """Configure P1-P4 as allied human Noldor Houses and P5-P8 as allied AI Morgoth forces."""
+    """Configure P1-P4 as allied human Noldor Houses and P5-P8 as allied AI Morgoth forces using official API."""
     pm.active_players = 8
 
-    # Suggested Civilizations / Architecture sets (if exposed as writable attributes on Player)
     civ_map: dict[int, int] = {
         1: 36,  # Poles / Vikings (Tuor & Rog)
         2: 1,   # Britons (Ecthelion & Egalmoth)
@@ -286,6 +388,14 @@ def _configure_players_and_diplomacy(pm: Any) -> None:
         8: 4,   # Teutons (Maeglin's Traitors)
     }
 
+    team_human = [PlayerId.ONE, PlayerId.TWO, PlayerId.THREE, PlayerId.FOUR]
+    team_ai = [PlayerId.FIVE, PlayerId.SIX, PlayerId.SEVEN, PlayerId.EIGHT]
+
+    # 1. Use PlayerManager.set_diplomacy_teams if supported by the installed AoE2ScenarioParser version
+    if hasattr(pm, "set_diplomacy_teams"):
+        pm.set_diplomacy_teams(team_human, team_ai)
+
+    # 2. Explicitly configure each player's attributes and 0-indexed (player - 1) diplomacy relations
     players = getattr(pm, "players", [])
     for idx in range(1, min(9, len(players))):
         p_obj = players[idx]
@@ -301,20 +411,20 @@ def _configure_players_and_diplomacy(pm: Any) -> None:
             ("stone", 0),
             ("gold", 0),
         ]:
-            if hasattr(p_obj, attr_name):
-                try:
-                    setattr(p_obj, attr_name, val)
-                except AttributeError:
-                    pass
+            _set_writable_attr(p_obj, attr_name, val)
 
-        # Set diplomacy matrix if diplomacy list is exposed on player object (0=Ally, 3=Enemy)
-        dip = getattr(p_obj, "diplomacy", None)
-        if isinstance(dip, list) and len(dip) >= 9:
-            for other_idx in range(1, 9):
-                if other_idx == idx:
-                    continue
-                same_team = (idx <= 4 and other_idx <= 4) or (idx >= 5 and other_idx >= 5)
-                dip[other_idx] = 0 if same_team else 3
+        for other_idx in range(1, 9):
+            if other_idx == idx:
+                continue
+            same_team = (idx <= 4 and other_idx <= 4) or (idx >= 5 and other_idx >= 5)
+            dip_state = DIPLOMACY_ALLY if same_team else DIPLOMACY_ENEMY
+
+            if hasattr(p_obj, "set_player_diplomacy"):
+                p_obj.set_player_diplomacy(PlayerId(other_idx), dip_state)
+            else:
+                dip_list = getattr(p_obj, "diplomacy", None)
+                if isinstance(dip_list, list) and len(dip_list) >= 8:
+                    dip_list[other_idx - 1] = dip_state
 
 
 def _sculpt_world_terrain(grid: SafeMapGrid) -> None:
@@ -330,12 +440,13 @@ def _sculpt_world_terrain(grid: SafeMapGrid) -> None:
     grid.paint_box(10, 10, 112, 122, TerrainId.GRASS_1, elev=2, protect_trees=True)
 
     # Outer Ring Wall foundation & Northern Moat
-    grid.paint_box(16, 16, 104, 114, TerrainId.ROAD, elev=2, protect_trees=True)
+    grid.paint_box(15, 15, 105, 114, TerrainId.ROAD, elev=2, protect_trees=True)
     # Northern Moat (Shallows = 4, initially blocked by rocks until P2 opens the Aqueduct!)
-    grid.paint_box(22, 112, 98, 116, TerrainId.SHALLOWS, elev=1, protect_trees=True)
+    grid.paint_box(22, 113, 98, 116, TerrainId.SHALLOWS, elev=1, protect_trees=True)
 
-    # Middle City Terrace (elev=4)
-    grid.paint_box(28, 28, 92, 98, TerrainId.ROAD_BROKEN, elev=4, protect_trees=True)
+    # Middle City Terrace (elev=4) - clean stone & grass in the south/west, siege damage only in the north
+    grid.paint_box(28, 28, 92, 92, TerrainId.GRASS_2, elev=4, protect_trees=True)
+    grid.paint_box(34, 92, 86, 108, TerrainId.ROAD_BROKEN, elev=3, protect_trees=True)
 
     # Amon Gwareth - Royal Hill at the heart of Gondolin (X=46..76, Y=48..78, elev=6)
     grid.paint_box(46, 48, 76, 78, TerrainId.ROAD, elev=6, protect_trees=True)
@@ -359,7 +470,7 @@ def _sculpt_world_terrain(grid: SafeMapGrid) -> None:
     )
     # West Avenue (Forges of Rog -> Amon Gwareth)
     grid.paint_corridor(
-        20, 63, 46, 63, 4, TerrainId.ROAD, elev=3, protect_trees=True, is_road=True
+        16, 63, 46, 63, 4, TerrainId.ROAD, elev=3, protect_trees=True, is_road=True
     )
     # East Avenue (East Gate -> Great Market -> Amon Gwareth)
     grid.paint_corridor(
@@ -381,13 +492,13 @@ def _sculpt_world_terrain(grid: SafeMapGrid) -> None:
     )
     # Inner Ring Boulevards connecting northern districts to East & West Avenues
     grid.paint_corridor(
-        34, 63, 34, 98, 2, TerrainId.ROAD, elev=3, protect_trees=True, is_road=True
+        34, 63, 34, 96, 2, TerrainId.ROAD, elev=3, protect_trees=True, is_road=True
     )
     grid.paint_corridor(
         34, 96, 86, 96, 2, TerrainId.ROAD, elev=3, protect_trees=True, is_road=True
     )
     grid.paint_corridor(
-        82, 63, 82, 98, 2, TerrainId.ROAD, elev=3, protect_trees=True, is_road=True
+        82, 63, 82, 96, 2, TerrainId.ROAD, elev=3, protect_trees=True, is_road=True
     )
 
     # 4. Phase II Dual Routes across Tumladen:
@@ -460,7 +571,7 @@ def _build_gondolin_walls_and_districts(
     um: Any,
     bldg_counter: dict[PlayerId, int],
 ) -> int:
-    """Construct Gondolin's outer/inner fortifications, gatehouses, and 7 House districts (~110 buildings)."""
+    """Construct Gondolin's fortifications, physical gates, and 7 House districts with ZERO failed placements."""
     placed_buildings = 0
 
     def add_city_bldg(
@@ -470,100 +581,133 @@ def _build_gondolin_walls_and_districts(
         y: int,
         footprint: int = 3,
         respect_roads: bool = True,
-    ) -> bool:
+    ) -> None:
         nonlocal placed_buildings
-        if not grid.can_place_footprint(x, y, footprint=footprint, respect_roads=respect_roads):
-            return False
+        xmin, ymin, xmax, ymax = grid.footprint_bounds(x, y, footprint)
+        if not grid.can_place_rect(xmin, ymin, xmax, ymax, respect_roads=respect_roads):
+            grid.failed_placements.append(
+                {
+                    "player": player,
+                    "unit_id": unit_id,
+                    "x": x,
+                    "y": y,
+                    "footprint": footprint,
+                    "respect_roads": respect_roads,
+                }
+            )
+            return
         grid.place_unit_safe(um, player, unit_id, x, y, footprint=footprint)
         bldg_counter[player] = bldg_counter.get(player, 0) + 1
         placed_buildings += 1
-        return True
 
     # =========================================================================
-    # A. CONTINUOUS OUTER STONE WALLS OF GONDOLIN (X=16..104, Y=16..111)
+    # STEP 1: PLACE ALL GATES, BASTIONS & WALL TOWERS FIRST (SO WALLS NEVER COLLIDE!)
     # =========================================================================
-    # Leave wide passable openings at the 4 Grand Gates and Northern/Eastern Siege Breaches
-    for wx in range(16, 105):
-        # South Wall (Y=16): South Grand Gate opening at X=57..65
-        if not (57 <= wx <= 65):
-            if wx % 8 == 0:
-                add_city_bldg(PlayerId.ONE, GUARD_TOWER_ID, wx, 16, footprint=2, respect_roads=False)
-            else:
-                add_city_bldg(PlayerId.ONE, FORTIFIED_WALL_ID, wx, 16, footprint=1, respect_roads=False)
+    # 1A. Physical City Gates on intact avenues (South Gate, West Forge Gate, Inner Citadel Gates)
+    # South Outer Gate at (60..63, 16) and West Outer Gate at (16, 62..65)
+    grid.place_gate_safe(um, PlayerId.ONE, CITY_GATE_SW_NE_ID, 61, 16, axis="X")
+    grid.place_gate_safe(um, PlayerId.ONE, CITY_GATE_NW_SE_ID, 16, 63, axis="Y")
+    bldg_counter[PlayerId.ONE] = bldg_counter.get(PlayerId.ONE, 0) + 2
 
-        # North Wall (Y=111): Breached at X=55..67 (North Avenue) & X=80..86 (NE Breach)
-        if not (55 <= wx <= 67 or 80 <= wx <= 86):
-            if wx % 8 == 0:
-                add_city_bldg(PlayerId.THREE, GUARD_TOWER_ID, wx, 111, footprint=2, respect_roads=False)
-            else:
-                add_city_bldg(PlayerId.THREE, FORTIFIED_WALL_ID, wx, 111, footprint=1, respect_roads=False)
+    # Inner Amon Gwareth Citadel Gates (South, North, West, East)
+    grid.place_gate_safe(um, PlayerId.ONE, CITY_GATE_SW_NE_ID, 61, 48, axis="X")
+    grid.place_gate_safe(um, PlayerId.ONE, CITY_GATE_SW_NE_ID, 61, 78, axis="X")
+    grid.place_gate_safe(um, PlayerId.ONE, CITY_GATE_NW_SE_ID, 46, 63, axis="Y")
+    grid.place_gate_safe(um, PlayerId.TWO, CITY_GATE_NW_SE_ID, 76, 63, axis="Y")
+    bldg_counter[PlayerId.ONE] = bldg_counter.get(PlayerId.ONE, 0) + 3
+    bldg_counter[PlayerId.TWO] = bldg_counter.get(PlayerId.TWO, 0) + 1
 
-    for wy in range(17, 111):
-        # West Wall (X=16): West Forge Gate opening at Y=59..67
-        if not (59 <= wy <= 67):
-            if wy % 8 == 0:
-                add_city_bldg(PlayerId.FOUR, GUARD_TOWER_ID, 16, wy, footprint=2, respect_roads=False)
-            else:
-                add_city_bldg(PlayerId.FOUR, FORTIFIED_WALL_ID, 16, wy, footprint=1, respect_roads=False)
-
-        # East Wall (X=104): East Breach opening at Y=57..69
-        if not (57 <= wy <= 69):
-            if wy % 8 == 0:
-                add_city_bldg(PlayerId.TWO, GUARD_TOWER_ID, 104, wy, footprint=2, respect_roads=False)
-            else:
-                add_city_bldg(PlayerId.TWO, FORTIFIED_WALL_ID, 104, wy, footprint=1, respect_roads=False)
-
-    # Grand Gatehouse Bastions (KEEP_ID = 235) flanking the 4 main avenues
-    gate_bastions: list[tuple[PlayerId, int, int]] = [
-        (PlayerId.ONE, 56, 16),
-        (PlayerId.ONE, 66, 16),
-        (PlayerId.THREE, 54, 111),
+    # 1B. Outer Corner Keeps (2x2) & Grand Gatehouse Bastions (2x2) placed outside the 1x1 wall line
+    outer_bastions: list[tuple[PlayerId, int, int]] = [
+        # 4 Outer Corners of Gondolin
+        (PlayerId.FOUR, 15, 15),
+        (PlayerId.ONE, 104, 15),
+        (PlayerId.THREE, 15, 111),
+        (PlayerId.THREE, 104, 111),
+        # South Gate flanking bastions (outside X=57..65)
+        (PlayerId.ONE, 55, 15),
+        (PlayerId.ONE, 66, 15),
+        # North Breach flanking bastions (outside X=55..67)
+        (PlayerId.THREE, 53, 111),
         (PlayerId.THREE, 68, 111),
-        (PlayerId.ONE, 16, 58),
-        (PlayerId.ONE, 16, 68),
-        (PlayerId.TWO, 104, 56),
+        # West Forge Gate flanking bastions (outside Y=59..67)
+        (PlayerId.ONE, 15, 57),
+        (PlayerId.ONE, 15, 68),
+        # East Breach flanking bastions (outside Y=57..69)
+        (PlayerId.TWO, 104, 55),
         (PlayerId.TWO, 104, 70),
     ]
-    for p_id, gx, gy in gate_bastions:
-        add_city_bldg(p_id, KEEP_ID, gx, gy, footprint=2, respect_roads=False)
+    for p_id, bx, by in outer_bastions:
+        add_city_bldg(p_id, KEEP_ID, bx, by, footprint=2, respect_roads=False)
 
-    # =========================================================================
-    # B. INNER CITADEL RING WALL AROUND AMON GWARETH (X=46..76, Y=48..78)
-    # =========================================================================
-    for cx in range(46, 77):
-        if not (57 <= cx <= 65):
-            add_city_bldg(PlayerId.ONE, FORTIFIED_WALL_ID, cx, 48, footprint=1, respect_roads=False)
-            add_city_bldg(PlayerId.ONE, FORTIFIED_WALL_ID, cx, 78, footprint=1, respect_roads=False)
-    for cy in range(49, 78):
-        # Leave West (59..67), East (59..67), Secret Tunnel (49..56), and Postern (69..76) open
-        if not (59 <= cy <= 67):
-            add_city_bldg(PlayerId.ONE, FORTIFIED_WALL_ID, 46, cy, footprint=1, respect_roads=False)
-        if not (49 <= cy <= 56 or 59 <= cy <= 67 or 69 <= cy <= 76):
-            add_city_bldg(PlayerId.TWO, FORTIFIED_WALL_ID, 76, cy, footprint=1, respect_roads=False)
+    # 1C. Outer Perimeter Guard Towers (2x2) placed at regular intervals along the walls
+    for tx in (24, 32, 40, 48, 74, 82, 90, 96):
+        add_city_bldg(PlayerId.ONE, GUARD_TOWER_ID, tx, 15, footprint=2, respect_roads=False)
+    for tx in (24, 32, 40, 48, 74, 90, 96):
+        add_city_bldg(PlayerId.THREE, GUARD_TOWER_ID, tx, 111, footprint=2, respect_roads=False)
+    for ty in (24, 32, 40, 48, 76, 84, 92, 100):
+        add_city_bldg(PlayerId.FOUR, GUARD_TOWER_ID, 15, ty, footprint=2, respect_roads=False)
+    for ty in (24, 32, 48, 74, 90, 98):
+        add_city_bldg(PlayerId.TWO, GUARD_TOWER_ID, 104, ty, footprint=2, respect_roads=False)
 
-    # Corner Citadel Keeps on Amon Gwareth
-    for kx, ky in [(46, 48), (76, 48), (46, 78), (76, 78)]:
+    # 1D. Inner Citadel Corner Keeps on Amon Gwareth (2x2) placed first
+    for kx, ky in [(45, 47), (76, 47), (45, 78), (76, 78)]:
         add_city_bldg(PlayerId.ONE, KEEP_ID, kx, ky, footprint=2, respect_roads=False)
 
     # =========================================================================
-    # C. PLANNED URBAN DISTRICTS OF THE SEVEN HOUSES (~105 BUILDINGS)
+    # STEP 2: FILL CONTINUOUS STONE WALL SEGMENTS (1x1) IN ALL UNOCCUPIED GAPS
+    # =========================================================================
+    for wx in range(16, 104):
+        # South Wall (Y=16): leave open at South Avenue approach (X=58..64 where gate sits)
+        if not (57 <= wx <= 65) and (wx, 16) not in grid.occupied_tiles:
+            add_city_bldg(PlayerId.ONE, FORTIFIED_WALL_ID, wx, 16, footprint=1, respect_roads=False)
+
+        # North Wall (Y=111): breached at North Avenue (X=55..67) and NE Breach (X=80..86)
+        if not (55 <= wx <= 67 or 80 <= wx <= 86) and (wx, 111) not in grid.occupied_tiles:
+            add_city_bldg(PlayerId.THREE, FORTIFIED_WALL_ID, wx, 111, footprint=1, respect_roads=False)
+
+    for wy in range(17, 111):
+        # West Wall (X=16): West Forge Gate sits at Y=62..65 (leave approach Y=59..67 clear of extra walls)
+        if not (59 <= wy <= 67) and (16, wy) not in grid.occupied_tiles:
+            add_city_bldg(PlayerId.FOUR, FORTIFIED_WALL_ID, 16, wy, footprint=1, respect_roads=False)
+
+        # East Wall (X=104): openings at Lower Tunnel (38..46), East Breach (57..69), and Upper Postern (78..86)
+        if not (38 <= wy <= 46 or 57 <= wy <= 69 or 78 <= wy <= 86) and (104, wy) not in grid.occupied_tiles:
+            add_city_bldg(PlayerId.TWO, FORTIFIED_WALL_ID, 104, wy, footprint=1, respect_roads=False)
+
+    # Inner Citadel Ring Wall around Amon Gwareth (X=46..76, Y=48..78)
+    for cx in range(47, 76):
+        if not (57 <= cx <= 65):
+            if (cx, 48) not in grid.occupied_tiles:
+                add_city_bldg(PlayerId.ONE, FORTIFIED_WALL_ID, cx, 48, footprint=1, respect_roads=False)
+            if (cx, 78) not in grid.occupied_tiles:
+                add_city_bldg(PlayerId.ONE, FORTIFIED_WALL_ID, cx, 78, footprint=1, respect_roads=False)
+
+    for cy in range(49, 78):
+        if not (59 <= cy <= 67) and (46, cy) not in grid.occupied_tiles:
+            add_city_bldg(PlayerId.ONE, FORTIFIED_WALL_ID, 46, cy, footprint=1, respect_roads=False)
+        if not (49 <= cy <= 56 or 59 <= cy <= 67 or 69 <= cy <= 76) and (76, cy) not in grid.occupied_tiles:
+            add_city_bldg(PlayerId.TWO, FORTIFIED_WALL_ID, 76, cy, footprint=1, respect_roads=False)
+
+    # =========================================================================
+    # STEP 3: PLANNED URBAN DISTRICTS OF THE SEVEN HOUSES (ZERO ROAD/TRIGGER COLLISIONS)
     # =========================================================================
     # 1. West Quarter: House of the Hammer of Wrath (Rog's Smithies, Armories & Guilds)
     west_hammer_layout: list[tuple[int, int, int, int]] = [
         (BLACKSMITH_ID, 20, 54, 3),
-        (BLACKSMITH_ID, 29, 54, 3),
+        (BLACKSMITH_ID, 39, 50, 3),
         (MINING_CAMP_ID, 20, 48, 2),
-        (BARRACKS_ID, 38, 54, 3),
-        (BARRACKS_ID, 38, 72, 3),
+        (BARRACKS_ID, 39, 55, 3),
+        (BARRACKS_ID, 39, 72, 3),
         (BLACKSMITH_ID, 20, 76, 3),
-        (MINING_CAMP_ID, 28, 78, 2),
+        (MINING_CAMP_ID, 28, 79, 2),
         (HOUSE_ID, 20, 43, 2),
-        (HOUSE_ID, 24, 43, 2),
-        (HOUSE_ID, 38, 46, 2),
-        (HOUSE_ID, 41, 46, 2),
+        (HOUSE_ID, 20, 40, 2),
+        (HOUSE_ID, 38, 45, 2),
+        (HOUSE_ID, 41, 45, 2),
         (HOUSE_ID, 38, 78, 2),
         (HOUSE_ID, 41, 78, 2),
-        (PAVILION_ID, 31, 48, 2),
+        (PAVILION_ID, 20, 51, 2),
     ]
     for u_id, bx, by, fp in west_hammer_layout:
         add_city_bldg(PlayerId.ONE, u_id, bx, by, footprint=fp)
@@ -574,17 +718,17 @@ def _build_gondolin_walls_and_districts(
         (BARRACKS_ID, 72, 34, 3),
         (ARCHERY_RANGE_ID, 48, 41, 3),
         (ARCHERY_RANGE_ID, 72, 41, 3),
-        (BLACKSMITH_ID, 53, 20, 3),
-        (BLACKSMITH_ID, 69, 20, 3),
-        (PAVILION_ID, 54, 35, 2),
+        (BLACKSMITH_ID, 51, 20, 3),
+        (BLACKSMITH_ID, 71, 20, 3),
+        (PAVILION_ID, 53, 35, 2),
         (PAVILION_ID, 68, 35, 2),
-        (HOUSE_ID, 46, 20, 2),
-        (HOUSE_ID, 49, 20, 2),
-        (HOUSE_ID, 73, 20, 2),
-        (HOUSE_ID, 76, 20, 2),
+        (HOUSE_ID, 45, 20, 2),
+        (HOUSE_ID, 48, 20, 2),
+        (HOUSE_ID, 74, 20, 2),
+        (HOUSE_ID, 77, 20, 2),
         (HOUSE_ID, 42, 34, 2),
         (HOUSE_ID, 42, 38, 2),
-        (HOUSE_ID, 78, 34, 2),
+        (HOUSE_ID, 83, 34, 2),
         (HOUSE_ID, 78, 38, 2),
     ]
     for u_id, bx, by, fp in south_wing_layout:
@@ -592,38 +736,38 @@ def _build_gondolin_walls_and_districts(
 
     # 3. SW Quarter: House of the Tree & Wardens of the Secret Way (Idril & Galdor)
     sw_tree_layout: list[tuple[int, int, int, int]] = [
-        (BARRACKS_ID, 33, 20, 3),
-        (ARCHERY_RANGE_ID, 33, 35, 3),
+        (BARRACKS_ID, 35, 20, 3),
+        (ARCHERY_RANGE_ID, 36, 35, 3),
         (LUMBER_CAMP_ID, 20, 32, 2),
-        (PAVILION_ID, 31, 31, 2),
+        (PAVILION_ID, 35, 30, 2),
         (PAVILION_ID, 20, 19, 2),
-        (HOUSE_ID, 20, 29, 2),
-        (HOUSE_ID, 37, 20, 2),
-        (HOUSE_ID, 37, 34, 2),
-        (HOUSE_ID, 37, 38, 2),
-        (HOUSE_ID, 30, 42, 2),
-        (HOUSE_ID, 38, 42, 2),
+        (HOUSE_ID, 20, 36, 2),
+        (HOUSE_ID, 39, 20, 2),
+        (HOUSE_ID, 40, 34, 2),
+        (HOUSE_ID, 40, 38, 2),
+        (HOUSE_ID, 30, 41, 2),
+        (HOUSE_ID, 39, 41, 2),
     ]
     for u_id, bx, by, fp in sw_tree_layout:
         add_city_bldg(PlayerId.FOUR, u_id, bx, by, footprint=fp)
 
     # 4. East Quarter: House of the Fountain & Heavenly Arch (Ecthelion & Egalmoth)
     east_fountain_layout: list[tuple[int, int, int, int]] = [
-        (ARCHERY_RANGE_ID, 86, 52, 3),
-        (ARCHERY_RANGE_ID, 98, 52, 3),
-        (BARRACKS_ID, 96, 74, 3),
-        (MONASTERY_ID, 80, 48, 3),
-        (MARKET_ID, 96, 44, 4),
-        (MILL_ID, 86, 44, 2),
-        (PAVILION_ID, 79, 55, 2),
-        (PAVILION_ID, 98, 70, 2),
+        (ARCHERY_RANGE_ID, 95, 52, 3),
+        (ARCHERY_RANGE_ID, 99, 52, 3),
+        (BARRACKS_ID, 95, 70, 3),
+        (MONASTERY_ID, 84, 38, 3),
+        (MARKET_ID, 95, 36, 4),
+        (MILL_ID, 94, 30, 2),
+        (PAVILION_ID, 99, 70, 2),
+        (PAVILION_ID, 99, 73, 2),
         (HOUSE_ID, 80, 42, 2),
         (HOUSE_ID, 83, 42, 2),
-        (HOUSE_ID, 98, 38, 2),
+        (HOUSE_ID, 99, 34, 2),
         (HOUSE_ID, 100, 48, 2),
-        (HOUSE_ID, 100, 76, 2),
-        (HOUSE_ID, 94, 82, 2),
-        (HOUSE_ID, 98, 82, 2),
+        (HOUSE_ID, 100, 55, 2),
+        (HOUSE_ID, 94, 88, 2),
+        (HOUSE_ID, 98, 88, 2),
     ]
     for u_id, bx, by, fp in east_fountain_layout:
         add_city_bldg(PlayerId.TWO, u_id, bx, by, footprint=fp)
@@ -632,13 +776,13 @@ def _build_gondolin_walls_and_districts(
     se_harp_layout: list[tuple[int, int, int, int]] = [
         (STABLE_ID, 82, 20, 3),
         (STABLE_ID, 98, 20, 3),
-        (MONASTERY_ID, 82, 36, 3),
+        (MONASTERY_ID, 84, 32, 3),
         (PAVILION_ID, 98, 32, 2),
         (HOUSE_ID, 86, 19, 2),
         (HOUSE_ID, 94, 19, 2),
         (HOUSE_ID, 98, 26, 2),
-        (HOUSE_ID, 84, 38, 2),
-        (HOUSE_ID, 95, 38, 2),
+        (HOUSE_ID, 80, 38, 2),
+        (HOUSE_ID, 99, 29, 2),
     ]
     for u_id, bx, by, fp in se_harp_layout:
         add_city_bldg(PlayerId.THREE, u_id, bx, by, footprint=fp)
@@ -648,17 +792,17 @@ def _build_gondolin_walls_and_districts(
         (STABLE_ID, 74, 84, 3),
         (ARCHERY_RANGE_ID, 88, 86, 3),
         (ARCHERY_RANGE_ID, 88, 102, 3),
-        (BARRACKS_ID, 68, 102, 3),
+        (BARRACKS_ID, 68, 104, 3),
         (UNIVERSITY_ID, 96, 92, 4),
-        (PAVILION_ID, 74, 90, 2),
-        (PAVILION_ID, 80, 104, 2),
-        (HOUSE_ID, 72, 80, 2),
-        (HOUSE_ID, 76, 80, 2),
-        (HOUSE_ID, 88, 80, 2),
-        (HOUSE_ID, 92, 80, 2),
+        (PAVILION_ID, 76, 90, 2),
+        (PAVILION_ID, 79, 104, 2),
+        (HOUSE_ID, 71, 80, 2),
+        (HOUSE_ID, 75, 80, 2),
+        (HOUSE_ID, 88, 90, 2),
+        (HOUSE_ID, 91, 90, 2),
         (HOUSE_ID, 96, 100, 2),
         (HOUSE_ID, 96, 104, 2),
-        (HOUSE_ID, 84, 106, 2),
+        (HOUSE_ID, 88, 106, 2),
     ]
     for u_id, bx, by, fp in ne_flower_swallow_layout:
         add_city_bldg(PlayerId.THREE, u_id, bx, by, footprint=fp)
@@ -667,18 +811,18 @@ def _build_gondolin_walls_and_districts(
     nw_pillar_layout: list[tuple[int, int, int, int]] = [
         (UNIVERSITY_ID, 42, 86, 4),
         (MARKET_ID, 24, 88, 4),
-        (BLACKSMITH_ID, 44, 102, 3),
+        (BLACKSMITH_ID, 42, 104, 3),
         (BARRACKS_ID, 24, 100, 3),
-        (LUMBER_CAMP_ID, 30, 82, 2),
+        (LUMBER_CAMP_ID, 29, 82, 2),
         (PAVILION_ID, 48, 84, 2),
         (HOUSE_ID, 20, 84, 2),
         (HOUSE_ID, 20, 92, 2),
         (HOUSE_ID, 20, 104, 2),
         (HOUSE_ID, 28, 104, 2),
-        (HOUSE_ID, 38, 104, 2),
+        (HOUSE_ID, 36, 104, 2),
         (HOUSE_ID, 48, 104, 2),
-        (HOUSE_ID, 42, 92, 2),
-        (HOUSE_ID, 48, 92, 2),
+        (HOUSE_ID, 40, 91, 2),
+        (HOUSE_ID, 48, 91, 2),
     ]
     for u_id, bx, by, fp in nw_pillar_layout:
         add_city_bldg(PlayerId.TWO, u_id, bx, by, footprint=fp)
@@ -695,10 +839,10 @@ def _build_gondolin_walls_and_districts(
         (STATUE_ID, 42, 68),
         (STATUE_ID, 80, 58),
         (STATUE_ID, 80, 68),
-        (FLAG_A_ID, 57, 49),
-        (FLAG_A_ID, 65, 49),
-        (FLAG_A_ID, 57, 77),
-        (FLAG_A_ID, 65, 77),
+        (FLAG_A_ID, 56, 49),
+        (FLAG_A_ID, 66, 49),
+        (FLAG_A_ID, 56, 77),
+        (FLAG_A_ID, 66, 77),
         (OLIVE_TREE_ID, 51, 52),
         (OLIVE_TREE_ID, 71, 52),
         (OLIVE_TREE_ID, 51, 74),
@@ -753,6 +897,9 @@ def build_map_and_entities(scenario: Any) -> dict[str, Any]:
     grid = SafeMapGrid(MAP_SIZE)
     _sculpt_world_terrain(grid)
 
+    # Protect NW isolated Phase Marker Torch coordinates (2, 222..234) from forest trees
+    grid.mark_no_trees_box(1, 220, 3, 236)
+
     # Copy terrain and Lipschitz-smoothed elevation to AoE2ScenarioParser tiles
     for y in range(MAP_SIZE):
         for x in range(MAP_SIZE):
@@ -793,6 +940,7 @@ def build_map_and_entities(scenario: Any) -> dict[str, Any]:
             "y": y,
             "player": player,
             "unit_id": unit_id,
+            "footprint": footprint,
         }
         if player in player_bldg_counts:
             player_bldg_counts[player] += 1
@@ -874,8 +1022,8 @@ def build_map_and_entities(scenario: Any) -> dict[str, Any]:
         destructible_rocks["caragdur_blockade"].append(r_obj.reference_id)
 
     # North Quarter Fire Hazard (hurts P3 until P2 captures aqueduct_control)
-    for fx in range(56, 67, 3):
-        for fy in (94, 100):
+    for fx in range(56, 66, 3):
+        for fy in (99, 103):
             f_obj = grid.place_unit_safe(
                 um,
                 PlayerId.GAIA,
@@ -901,7 +1049,7 @@ def build_map_and_entities(scenario: Any) -> dict[str, Any]:
         destructible_rocks["aqueduct_dry_rocks"].append(r_obj.reference_id)
 
     # Phase II Exit Gates (Sealed until Phase I defence of Amon Gwareth concludes)
-    register_bldg("idril_waygate", PlayerId.FOUR, OUTPOST_ID, 74, 52, footprint=2)
+    register_bldg("idril_waygate", PlayerId.FOUR, OUTPOST_ID, 73, 52, footprint=2)
     for ry in range(49, 56):
         r_obj = grid.place_unit_safe(
             um,
@@ -926,7 +1074,7 @@ def build_map_and_entities(scenario: Any) -> dict[str, Any]:
         destructible_rocks["tumladen_exit_rocks"].append(r_obj.reference_id)
 
     # =========================================================================
-    # 2. PHASE II & III STRUCTURES: TUMLADEN, ORFALCH ECHOR & CIRITH THORONATH
+    # 2. PHASE II & III STRUCTURES: TUMLADEN, SEVEN GATES & CIRITH THORONATH
     # =========================================================================
     register_bldg("wolf_camp_1", PlayerId.FIVE, STABLE_ID, 132, 88, footprint=3)
     register_bldg("wolf_camp_2", PlayerId.FIVE, STABLE_ID, 156, 88, footprint=3)
@@ -934,16 +1082,21 @@ def build_map_and_entities(scenario: Any) -> dict[str, Any]:
     register_bldg("cliff_tower_1", PlayerId.FIVE, GUARD_TOWER_ID, 132, 62, footprint=2)
     register_bldg("cliff_tower_2", PlayerId.FIVE, GUARD_TOWER_ID, 156, 62, footprint=2)
 
-    gate_coords: list[tuple[str, int, int]] = [
-        ("orfalch_gate_1", 190, 94),   # 1. Wooden Gate
-        ("orfalch_gate_2", 198, 108),  # 2. Stone Gate
-        ("orfalch_gate_3", 206, 122),  # 3. Bronze Gate
-        ("orfalch_gate_4", 208, 138),  # 4. Iron Gate
-        ("orfalch_gate_5", 202, 150),  # 5. Silver Gate
-        ("orfalch_gate_6", 196, 162),  # 6. Gold Gate
-        ("orfalch_gate_7", 190, 174),  # 7. Steel Gate
+    # Seven Gates of Orfalch Echor: each gate has flanking architectural towers/bastions outside the road
+    # plus the central removable rock blockade in destructible_rocks["orfalch_gate_1..7"]
+    gate_configs: list[tuple[str, int, int, int]] = [
+        ("orfalch_gate_1", 190, 94, OUTPOST_ID),      # 1. Wooden Gate
+        ("orfalch_gate_2", 198, 108, GUARD_TOWER_ID), # 2. Stone Gate
+        ("orfalch_gate_3", 206, 122, GUARD_TOWER_ID), # 3. Bronze Gate
+        ("orfalch_gate_4", 208, 138, KEEP_ID),        # 4. Iron Gate
+        ("orfalch_gate_5", 202, 150, KEEP_ID),        # 5. Silver Gate
+        ("orfalch_gate_6", 196, 162, KEEP_ID),        # 6. Gold Gate
+        ("orfalch_gate_7", 190, 174, KEEP_ID),        # 7. Steel Gate
     ]
-    for g_key, gx, gy in gate_coords:
+    for g_key, gx, gy, tower_id in gate_configs:
+        # Flanking gate towers on both sides of the gorge road
+        grid.place_unit_safe(um, PlayerId.GAIA, tower_id, gx - 4, gy, footprint=2)
+        grid.place_unit_safe(um, PlayerId.GAIA, tower_id, gx + 3, gy, footprint=2)
         for dx in range(-2, 3):
             r_obj = grid.place_unit_safe(
                 um,
@@ -984,7 +1137,6 @@ def build_map_and_entities(scenario: Any) -> dict[str, Any]:
     for sx, sy in starts.values():
         grid.mark_road_box(sx - 6, sy - 4, sx + 6, sy + 8)
 
-    # Protect refugee positions and Caragdur/Aqueduct combat arenas
     refugee_groups: list[dict[str, Any]] = [
         {
             "id": "ref_smiths",
@@ -1044,7 +1196,7 @@ def build_map_and_entities(scenario: Any) -> dict[str, Any]:
     for rg in refugee_groups:
         grid.mark_road_box(rg["x"] - 3, rg["y"] - 3, rg["x"] + 3, rg["y"] + 3)
 
-    # Build Gondolin's walls, gatehouses, and 7 House urban districts
+    # Build Gondolin's walls, gatehouses, and 7 House urban districts (0 failed placements!)
     _build_gondolin_walls_and_districts(grid, um, player_bldg_counts)
 
     # =========================================================================
@@ -1073,8 +1225,12 @@ def build_map_and_entities(scenario: Any) -> dict[str, Any]:
 
     # Place isolated Balance Sanctuary King for Player 1
     grid.place_unit_safe(um, PlayerId.ONE, SANCTUARY_KING_ID, 12, 228, footprint=1)
-    grid.place_unit_safe(um, PlayerId.ONE, MAP_REVEALER_ID, 12, 228, footprint=1)
-    grid.place_unit_safe(um, PlayerId.ONE, MAP_REVEALER_ID, 61, 63, footprint=1)
+    grid.place_unit_safe(
+        um, PlayerId.ONE, MAP_REVEALER_ID, 12, 229, footprint=1, allow_overlap=True
+    )
+    grid.place_unit_safe(
+        um, PlayerId.ONE, MAP_REVEALER_ID, 61, 63, footprint=1, allow_overlap=True
+    )
     player_bldg_counts[PlayerId.ONE] += 2
 
     # Place stranded Noldor citizen groups
@@ -1089,11 +1245,10 @@ def build_map_and_entities(scenario: Any) -> dict[str, Any]:
                 footprint=1,
             )
 
-    # CRITICAL P0 FIX: Ensure P5, P6, P7, and P8 all have active military buildings AND combat units at 0:00
-    # so the Genie engine never marks any AI faction as Defeated on match start!
+    # Initial AI garrisons for P5, P6, P7, and P8 (placed cleanly outside player start & ambush zones)
     # P5 (Angband Orc Horde): Northern Siege Camp & Vanguard at North Breach
-    grid.place_unit_safe(um, PlayerId.FIVE, BARRACKS_ID, 52, 118, footprint=3)
-    grid.place_unit_safe(um, PlayerId.FIVE, ARCHERY_RANGE_ID, 70, 118, footprint=3)
+    grid.place_unit_safe(um, PlayerId.FIVE, BARRACKS_ID, 51, 119, footprint=3)
+    grid.place_unit_safe(um, PlayerId.FIVE, ARCHERY_RANGE_ID, 71, 119, footprint=3)
     for i in range(8):
         grid.place_unit_safe(
             um, PlayerId.FIVE, ENEMY_ORC_INFANTRY_ID, 58 + (i % 4), 104 + (i // 4), footprint=1
@@ -1107,26 +1262,26 @@ def build_map_and_entities(scenario: Any) -> dict[str, Any]:
         )
 
     # P6 (Iron Dragons & Siege Engines): Siege Workshops outside North & East Walls + Scorpion/Dragon vanguard
-    grid.place_unit_safe(um, PlayerId.SIX, SIEGE_WORKSHOP_ID, 61, 119, footprint=4)
+    grid.place_unit_safe(um, PlayerId.SIX, SIEGE_WORKSHOP_ID, 61, 120, footprint=4)
     grid.place_unit_safe(um, PlayerId.SIX, SIEGE_WORKSHOP_ID, 108, 63, footprint=4)
-    grid.place_unit_safe(um, PlayerId.SIX, ENEMY_IRON_DRAGON_RAM_ID, 61, 115, footprint=1)
-    grid.place_unit_safe(um, PlayerId.SIX, ENEMY_FIRE_DRAKE_ID, 59, 115, footprint=1)
-    grid.place_unit_safe(um, PlayerId.SIX, ENEMY_HEAVY_SCORPION_ID, 63, 115, footprint=1)
+    grid.place_unit_safe(um, PlayerId.SIX, ENEMY_IRON_DRAGON_RAM_ID, 61, 116, footprint=1)
+    grid.place_unit_safe(um, PlayerId.SIX, ENEMY_FIRE_DRAKE_ID, 59, 116, footprint=1)
+    grid.place_unit_safe(um, PlayerId.SIX, ENEMY_HEAVY_SCORPION_ID, 63, 116, footprint=1)
     grid.place_unit_safe(um, PlayerId.SIX, ENEMY_IRON_DRAGON_RAM_ID, 105, 63, footprint=1)
 
-    # P7 (Balrogs of Morgoth): Citadel of Flame in Northern Camp + Balrog Lieutenants at Altar & Steel Gate
+    # P7 (Balrogs of Morgoth): Citadel of Flame in Northern Tumladen + Balrog Lieutenants at Altar & Steel Gate
     grid.place_unit_safe(um, PlayerId.SEVEN, CASTLE_ID, 145, 118, footprint=4)
-    grid.place_unit_safe(um, PlayerId.SEVEN, ENEMY_BALROG_BOSS_ID, 145, 109, footprint=1)
+    grid.place_unit_safe(um, PlayerId.SEVEN, ENEMY_BALROG_BOSS_ID, 145, 108, footprint=1)
     grid.place_unit_safe(um, PlayerId.SEVEN, ENEMY_BALROG_BOSS_ID, 184, 173, footprint=1)
 
     # P8 (Maeglin's House of the Mole Traitors): Traitor Barracks at Caragdur + Guards at Caragdur & Aqueduct
-    grid.place_unit_safe(um, PlayerId.EIGHT, BARRACKS_ID, 19, 47, footprint=3)
+    grid.place_unit_safe(um, PlayerId.EIGHT, BARRACKS_ID, 18, 47, footprint=3)
     for i in range(4):
         grid.place_unit_safe(
-            um, PlayerId.EIGHT, ENEMY_MOLE_TRAITOR_ID, 21 + i, 40, footprint=1
+            um, PlayerId.EIGHT, ENEMY_MOLE_TRAITOR_ID, 22 + i, 42, footprint=1
         )
         grid.place_unit_safe(
-            um, PlayerId.EIGHT, ENEMY_MOLE_PIKE_ID, 82 + i, 71, footprint=1
+            um, PlayerId.EIGHT, ENEMY_MOLE_PIKE_ID, 83 + i, 78, footprint=1
         )
 
     # Populate dense forests and seal map edges
