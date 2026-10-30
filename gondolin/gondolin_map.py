@@ -756,10 +756,10 @@ def build_map_and_entities(scenario: Any) -> dict[str, Any]:
 
     # Phase II Exit Gates & Siege Perimeter (Sealed at X=105 until Gothmog falls on Amon Gwareth!)
     register_bldg("idril_waygate", PlayerId.FOUR, OUTPOST_ID, 73, 52, footprint=2)
-    for sx_wall in range(16, 106):
+    for sx_wall in range(2, 106):
         if grid.can_place_footprint(sx_wall, 124, footprint=1, respect_roads=False):
             grid.place_unit_safe(um, PlayerId.GAIA, ROCK_CLIFF_ID, sx_wall, 124, footprint=1, clear_trees_around=False, strict=True)
-    for sy_wall in range(16, 125):
+    for sy_wall in range(2, 125):
         if 49 <= sy_wall <= 55 or 60 <= sy_wall <= 68:
             r_obj = grid.place_unit_safe(
                 um, PlayerId.GAIA, ROCK_CLIFF_ID, 105, sy_wall, footprint=1, clear_trees_around=False, strict=True
@@ -767,6 +767,10 @@ def build_map_and_entities(scenario: Any) -> dict[str, Any]:
             destructible_rocks["tumladen_exit_rocks"].append(r_obj.reference_id)
         elif grid.can_place_footprint(105, sy_wall, footprint=1, respect_roads=False):
             grid.place_unit_safe(um, PlayerId.GAIA, ROCK_CLIFF_ID, 105, sy_wall, footprint=1, clear_trees_around=False, strict=True)
+    # Rock ridge spine separating Lower Route (Y=36..44) from Upper Route (Y=60..92) across Tumladen
+    for rx_spine in range(106, 172):
+        if grid.can_place_footprint(rx_spine, 55, footprint=1, respect_roads=False):
+            grid.place_unit_safe(um, PlayerId.GAIA, ROCK_CLIFF_ID, rx_spine, 55, footprint=1, clear_trees_around=False, strict=True)
     for ry in range(50, 56):
         r_obj = grid.place_unit_safe(
             um, PlayerId.GAIA, ROCK_CLIFF_ID, 78, ry, footprint=1, clear_trees_around=False, strict=True
@@ -806,23 +810,34 @@ def build_map_and_entities(scenario: Any) -> dict[str, Any]:
                 um, PlayerId.GAIA, ROCK_CLIFF_ID, gx + dx, gy, footprint=1, clear_trees_around=False, strict=True
             )
             destructible_rocks[g_key].append(r_obj.reference_id)
-    # Also seal the upper goat-path exit at Y=174 into Cirith Thoronath with Gate 7 rocks until Steel Winch is destroyed
-    for gx_goat in range(175, 186):
-        if grid.can_place_footprint(gx_goat, 174, footprint=1, respect_roads=False):
-            r_obj = grid.place_unit_safe(
-                um, PlayerId.GAIA, ROCK_CLIFF_ID, gx_goat, 174, footprint=1, clear_trees_around=False, strict=True
-            )
-            destructible_rocks["orfalch_gate_7"].append(r_obj.reference_id)
+    # Seal the entire Y=174 canyon line and X=174 western cliff wall so Cirith Thoronath is only reachable via Gate 7
+    for gx_canyon in range(174, 238):
+        if 176 <= gx_canyon <= 183:
+            if grid.can_place_footprint(gx_canyon, 174, footprint=1, respect_roads=False):
+                r_obj = grid.place_unit_safe(
+                    um, PlayerId.GAIA, ROCK_CLIFF_ID, gx_canyon, 174, footprint=1, clear_trees_around=False, strict=True
+                )
+                destructible_rocks["orfalch_gate_7"].append(r_obj.reference_id)
+        elif grid.can_place_footprint(gx_canyon, 174, footprint=1, respect_roads=False):
+            grid.place_unit_safe(um, PlayerId.GAIA, ROCK_CLIFF_ID, gx_canyon, 174, footprint=1, clear_trees_around=False, strict=True)
+    for gy_canyon in range(175, 238):
+        if grid.can_place_footprint(174, gy_canyon, footprint=1, respect_roads=False):
+            grid.place_unit_safe(um, PlayerId.GAIA, ROCK_CLIFF_ID, 174, gy_canyon, footprint=1, clear_trees_around=False, strict=True)
 
     register_bldg("winch_bronze", PlayerId.FIVE, OUTPOST_ID, 188, 114, footprint=2)
     register_bldg("winch_silver", PlayerId.FIVE, OUTPOST_ID, 194, 144, footprint=2)
-    register_bldg("winch_steel", PlayerId.SEVEN, KEEP_ID, 180, 172, footprint=2)
+    register_bldg("winch_steel", PlayerId.SEVEN, KEEP_ID, 180, 171, footprint=2)
 
-    for dy in range(-4, 5):
-        r_obj = grid.place_unit_safe(
-            um, PlayerId.GAIA, ROCK_CLIFF_ID, 218, 222 + dy, footprint=1, clear_trees_around=False, strict=True
-        )
-        destructible_rocks["cirith_exit_rocks"].append(r_obj.reference_id)
+    # Seal the X=218 precipice line across Y=175..238, with cirith_exit_rocks at Y=218..226
+    for cy_exit in range(175, 238):
+        if 218 <= cy_exit <= 226:
+            if grid.can_place_footprint(218, cy_exit, footprint=1, respect_roads=False):
+                r_obj = grid.place_unit_safe(
+                    um, PlayerId.GAIA, ROCK_CLIFF_ID, 218, cy_exit, footprint=1, clear_trees_around=False, strict=True
+                )
+                destructible_rocks["cirith_exit_rocks"].append(r_obj.reference_id)
+        elif grid.can_place_footprint(218, cy_exit, footprint=1, respect_roads=False):
+            grid.place_unit_safe(um, PlayerId.GAIA, ROCK_CLIFF_ID, 218, cy_exit, footprint=1, clear_trees_around=False, strict=True)
 
     # =========================================================================
     # 3. PROTECT TRIGGER & SPAWN SECTORS BEFORE BUILDING URBAN DISTRICTS
