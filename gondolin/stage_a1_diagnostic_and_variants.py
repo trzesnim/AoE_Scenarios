@@ -1,4 +1,4 @@
-"""Stage A1/A2-bis Diagnostic & Isolated Variant Builder (Strictly preserves baseline commit 9b240dc6)."""
+"""Stage A1/A2-bis Diagnostic & In-Memory Variant Builder (Zero disk writes to repo .py files)."""
 
 from __future__ import annotations
 
@@ -163,7 +163,7 @@ def scan_ast_for_magic_id_literals(base_dir: Path) -> list[str]:
     return findings
 
 
-def inspect_reloaded_scenario_if_available(base_dir: Path) -> None:
+def inspect_reloaded_scenario_if_available() -> None:
     """If AoE2ScenarioParser and generated .aoe2scenario exist locally, inspect real trigger count & 8x8 diplomacy."""
     try:
         from AoE2ScenarioParser.scenarios.aoe2_de_scenario import AoE2DEScenario
@@ -227,26 +227,30 @@ def print_diagnostic_report(base_dir: Path) -> None:
     for ml in magic_lits:
         print(f"  {ml}")
     print("=" * 92)
-    inspect_reloaded_scenario_if_available(base_dir)
+    inspect_reloaded_scenario_if_available()
 
 
-# Strictly isolated A2-bis variants (1 variable per variant, no key collision with 359!)
+# Strictly isolated A2-bis variants (100% in-memory config & trigger mutations, 0 disk writes to .py files!)
 A2_BIS_VARIANTS: dict[str, dict[str, Any]] = {
     "baseline": {
         "output": "Gondolin_A2B_0_Baseline.aoe2scenario",
         "desc": "Czysty stan bazowy (commit 9b240dc6) bez zadnych zmian.",
         "config_replacements": [],
-        "quests_replacements": [],
-        "mechanics_replacements": [],
+        "disable_triggers": [],
+        "set_trigger_timers": {},
     },
     "a2_t1_loop_timer_probe": {
         "output": "Gondolin_A2B_T1_LoopTimerProbe5s.aoe2scenario",
-        "desc": "Test semantyki looping=True + timer=5 w P6_Dragon_Drop_east_avenue_Z0 (zmiana timera z 32 na 5s do obserwacji 0..12s).",
+        "desc": "Test semantyki looping=True + timer=5 w P6_Dragon_Drop_* (zmiana timera z 32 na 5s do obserwacji 0..15s).",
         "config_replacements": [],
-        "quests_replacements": [],
-        "mechanics_replacements": [
-            ("safe_call(t_drop.new_condition.timer, timer=32)", "safe_call(t_drop.new_condition.timer, timer=5)"),
-        ],
+        "disable_triggers": [],
+        "set_trigger_timers": {
+            "P6_Dragon_Drop_north_avenue_Z0": 5,
+            "P6_Dragon_Drop_north_avenue_Z1": 5,
+            "P6_Dragon_Drop_north_avenue_Z2": 5,
+            "P6_Dragon_Drop_east_avenue_Z0": 5,
+            "P6_Dragon_Drop_east_avenue_Z1": 5,
+        },
     },
     "a2_b1a_693_to_694": {
         "output": "Gondolin_A2B_1a_WingGuard_693_to_694.aoe2scenario",
@@ -254,8 +258,8 @@ A2_BIS_VARIANTS: dict[str, dict[str, Any]] = {
         "config_replacements": [
             ("UNIT_WING_GUARD_ID: int = 693", "UNIT_WING_GUARD_ID: int = 694"),
         ],
-        "quests_replacements": [],
-        "mechanics_replacements": [],
+        "disable_triggers": [],
+        "set_trigger_timers": {},
     },
     "a2_b1b_1124_to_1125": {
         "output": "Gondolin_A2B_1b_OrcInf_1124_to_1125.aoe2scenario",
@@ -263,8 +267,8 @@ A2_BIS_VARIANTS: dict[str, dict[str, Any]] = {
         "config_replacements": [
             ("ENEMY_ORC_INFANTRY_ID: int = 1124", "ENEMY_ORC_INFANTRY_ID: int = 1125"),
         ],
-        "quests_replacements": [],
-        "mechanics_replacements": [],
+        "disable_triggers": [],
+        "set_trigger_timers": {},
     },
     "a2_b1c_1130_to_1131": {
         "output": "Gondolin_A2B_1c_Rattan_1130_to_1131.aoe2scenario",
@@ -272,8 +276,8 @@ A2_BIS_VARIANTS: dict[str, dict[str, Any]] = {
         "config_replacements": [
             ("UNIT_ARCH_RATTAN_ID: int = 1130", "UNIT_ARCH_RATTAN_ID: int = 1131"),
         ],
-        "quests_replacements": [],
-        "mechanics_replacements": [],
+        "disable_triggers": [],
+        "set_trigger_timers": {},
     },
     "a2_b1d_469_to_868": {
         "output": "Gondolin_A2B_1d_Swallow_469_to_868.aoe2scenario",
@@ -281,8 +285,8 @@ A2_BIS_VARIANTS: dict[str, dict[str, Any]] = {
         "config_replacements": [
             ("UNIT_SWALLOW_SNIPER_ID: int = 469", "UNIT_SWALLOW_SNIPER_ID: int = 868"),
         ],
-        "quests_replacements": [],
-        "mechanics_replacements": [],
+        "disable_triggers": [],
+        "set_trigger_timers": {},
     },
     "a2_b1e_756_to_757": {
         "output": "Gondolin_A2B_1e_Warg_756_to_757.aoe2scenario",
@@ -290,8 +294,8 @@ A2_BIS_VARIANTS: dict[str, dict[str, Any]] = {
         "config_replacements": [
             ("ENEMY_WARG_RIDER_ID: int = 756", "ENEMY_WARG_RIDER_ID: int = 757"),
         ],
-        "quests_replacements": [],
-        "mechanics_replacements": [],
+        "disable_triggers": [],
+        "set_trigger_timers": {},
     },
     "a2_b1f_532_to_892": {
         "output": "Gondolin_A2B_1f_MolePike_532_to_892.aoe2scenario",
@@ -299,8 +303,8 @@ A2_BIS_VARIANTS: dict[str, dict[str, Any]] = {
         "config_replacements": [
             ("ENEMY_MOLE_PIKE_ID: int = 532", "ENEMY_MOLE_PIKE_ID: int = 892"),
         ],
-        "quests_replacements": [],
-        "mechanics_replacements": [],
+        "disable_triggers": [],
+        "set_trigger_timers": {},
     },
     "a2_b1g_682_to_200": {
         "output": "Gondolin_A2B_1g_Egalmoth_682_to_200.aoe2scenario",
@@ -308,44 +312,42 @@ A2_BIS_VARIANTS: dict[str, dict[str, Any]] = {
         "config_replacements": [
             ("HERO_EGALMOTH_ID: int = 682", "HERO_EGALMOTH_ID: int = 200"),
         ],
-        "quests_replacements": [],
-        "mechanics_replacements": [],
+        "disable_triggers": [],
+        "set_trigger_timers": {},
     },
     "a2_b2_disable_init03s": {
         "output": "Gondolin_A2B_2_DisableInit03sStats.aoe2scenario",
         "desc": "Izolacja 1 triggera: wylaczenie Init_03s_RPG_Unit_And_Hero_Stats (0:03, 480 efektow modify_attribute).",
         "config_replacements": [],
-        "quests_replacements": [],
-        "mechanics_replacements": [
-            ('name="Init_03s_RPG_Unit_And_Hero_Stats",\n        enabled=True,', 'name="Init_03s_RPG_Unit_And_Hero_Stats",\n        enabled=False,'),
-        ],
+        "disable_triggers": ["Init_03s_RPG_Unit_And_Hero_Stats"],
+        "set_trigger_timers": {},
     },
     "a2_b3a_disable_east_z0_drop": {
         "output": "Gondolin_A2B_3a_DisableEastZ0Drop.aoe2scenario",
         "desc": "Izolacja P6_Dragon_Drop_east_avenue_Z0 (wylaczenie zrzutu w strefie, gdzie od 0:00 stoi taran P6 w 102,63).",
         "config_replacements": [],
-        "quests_replacements": [],
-        "mechanics_replacements": [
-            ('name=f"P6_Dragon_Drop_{ave_name}_Z{idx}",\n                enabled=True,', 'name=f"P6_Dragon_Drop_{ave_name}_Z{idx}",\n                enabled=not (ave_name == "east_avenue" and idx == 0),'),
-        ],
+        "disable_triggers": ["P6_Dragon_Drop_east_avenue_Z0"],
+        "set_trigger_timers": {},
     },
     "a2_b3b_disable_all_5_drops": {
         "output": "Gondolin_A2B_3b_DisableAll5DragonDrops.aoe2scenario",
         "desc": "Wylaczenie wszystkich 5 cyklicznych triggerow P6_Dragon_Drop_* (32s), przy pozostawieniu spawnu P6 z 15s.",
         "config_replacements": [],
-        "quests_replacements": [],
-        "mechanics_replacements": [
-            ('name=f"P6_Dragon_Drop_{ave_name}_Z{idx}",\n                enabled=True,', 'name=f"P6_Dragon_Drop_{ave_name}_Z{idx}",\n                enabled=False,'),
+        "disable_triggers": [
+            "P6_Dragon_Drop_north_avenue_Z0",
+            "P6_Dragon_Drop_north_avenue_Z1",
+            "P6_Dragon_Drop_north_avenue_Z2",
+            "P6_Dragon_Drop_east_avenue_Z0",
+            "P6_Dragon_Drop_east_avenue_Z1",
         ],
+        "set_trigger_timers": {},
     },
     "a2_b3c_disable_p6_15s_spawn": {
         "output": "Gondolin_A2B_3c_DisableP6Spawn15sOnly.aoe2scenario",
         "desc": "Wylaczenie wylacznie P6_Spawn_Iron_Dragons_Phase1 (15s), przy pozostawieniu 5 triggerow P6_Dragon_Drop_*.",
         "config_replacements": [],
-        "quests_replacements": [],
-        "mechanics_replacements": [
-            ('name="P6_Spawn_Iron_Dragons_Phase1",\n        enabled=True,', 'name="P6_Spawn_Iron_Dragons_Phase1",\n        enabled=False,'),
-        ],
+        "disable_triggers": ["P6_Spawn_Iron_Dragons_Phase1"],
+        "set_trigger_timers": {},
     },
     "a2_b1_all_valid_units": {
         "output": "Gondolin_A2B_1_AllDeadAndProjectileIDsFixed.aoe2scenario",
@@ -359,57 +361,77 @@ A2_BIS_VARIANTS: dict[str, dict[str, Any]] = {
             ("ENEMY_MOLE_PIKE_ID: int = 532", "ENEMY_MOLE_PIKE_ID: int = 892"),
             ("HERO_EGALMOTH_ID: int = 682", "HERO_EGALMOTH_ID: int = 200"),
         ],
-        "quests_replacements": [],
-        "mechanics_replacements": [],
+        "disable_triggers": [],
+        "set_trigger_timers": {},
     },
 }
 
 
 @contextmanager
-def temporary_file_patches(base_dir: Path, variant_cfg: dict[str, Any]) -> Iterator[None]:
-    """Temporarily patch source files with backup files (.bak) and verify SHA-256 restoration on exit."""
-    target_files = ["gondolin_config.py", "gondolin_quests.py", "gondolin_mechanics.py"]
-    pre_sums = compute_core_checksums(base_dir)
-    originals: dict[Path, bytes] = {}
-    backups: dict[Path, Path] = {}
-    for fname in target_files:
-        fpath = base_dir / fname
-        bak_path = base_dir / f"{fname}.a2bak"
-        raw = fpath.read_bytes()
-        originals[fpath] = raw
-        bak_path.write_bytes(raw)
-        backups[fpath] = bak_path
+def in_memory_config_patch(base_dir: Path, config_replacements: list[tuple[str, str]]) -> Iterator[None]:
+    """Patch gondolin_config in memory (0 disk writes!) and reload dependent modules; restore on exit."""
+    import gondolin_config
+    import gondolin_map
+    import gondolin_mechanics
+    import gondolin_quests
+
+    orig_cfg_text = (base_dir / "gondolin_config.py").read_text(encoding="utf-8")
+    patched_text = orig_cfg_text
+    for old_str, new_str in config_replacements:
+        if old_str not in patched_text:
+            msg = f"[BLAD WARIANTU] Nie znaleziono wzorca '{old_str}' w gondolin_config.py!"
+            raise RuntimeError(msg)
+        patched_text = patched_text.replace(old_str, new_str, 1)
 
     try:
-        for file_key, fname in [
-            ("config_replacements", "gondolin_config.py"),
-            ("quests_replacements", "gondolin_quests.py"),
-            ("mechanics_replacements", "gondolin_mechanics.py"),
-        ]:
-            fpath = base_dir / fname
-            text = originals[fpath].decode("utf-8")
-            for old_str, new_str in variant_cfg[file_key]:
-                if old_str not in text:
-                    msg = f"[BLAD WARIANTU] Nie znaleziono wzorca '{old_str}' w pliku {fname}!"
-                    raise RuntimeError(msg)
-                text = text.replace(old_str, new_str, 1)
-            ast.parse(text)
-            fpath.write_text(text, encoding="utf-8")
+        if config_replacements:
+            exec(compile(patched_text, "gondolin_config.py", "exec"), gondolin_config.__dict__)
+            importlib.reload(gondolin_map)
+            importlib.reload(gondolin_mechanics)
+            importlib.reload(gondolin_quests)
         yield
     finally:
-        for fpath, raw_bytes in originals.items():
-            fpath.write_bytes(raw_bytes)
-            bak_path = backups[fpath]
-            if bak_path.exists():
-                bak_path.unlink()
-        post_sums = compute_core_checksums(base_dir)
-        if pre_sums != post_sums:
-            msg = f"[BLAD KRYTYCZNY SUM KONTROLNYCH] Sumy SHA-256 po przywroceniu roznia sie: {pre_sums} != {post_sums}"
-            raise RuntimeError(msg)
+        if config_replacements:
+            exec(compile(orig_cfg_text, "gondolin_config.py", "exec"), gondolin_config.__dict__)
+            importlib.reload(gondolin_map)
+            importlib.reload(gondolin_mechanics)
+            importlib.reload(gondolin_quests)
+
+
+def apply_in_memory_trigger_mutations(scenario: Any, variant_cfg: dict[str, Any]) -> None:
+    """Apply trigger disablement or timer overrides directly to the in-memory scenario object."""
+    disable_set = set(variant_cfg.get("disable_triggers", []))
+    timer_map: dict[str, int] = variant_cfg.get("set_trigger_timers", {})
+
+    disabled_found: set[str] = set()
+    timers_found: set[str] = set()
+
+    for trig in scenario.trigger_manager.triggers:
+        if trig.name in disable_set:
+            trig.enabled = False
+            disabled_found.add(trig.name)
+        if trig.name in timer_map:
+            new_t = timer_map[trig.name]
+            for cond in trig.conditions:
+                if hasattr(cond, "timer") and getattr(cond, "timer", None) is not None:
+                    cond.timer = new_t
+                    timers_found.add(trig.name)
+                elif hasattr(cond, "kwargs") and "timer" in cond.kwargs:
+                    cond.kwargs["timer"] = new_t
+                    timers_found.add(trig.name)
+
+    if disabled_found != disable_set:
+        missing = disable_set - disabled_found
+        msg = f"[BLAD TRIGGERA] Nie znaleziono triggerow do wylaczenia: {missing}"
+        raise RuntimeError(msg)
+    if timers_found != set(timer_map.keys()):
+        missing = set(timer_map.keys()) - timers_found
+        msg = f"[BLAD TIMERA] Nie znaleziono warunkow timer w triggerach: {missing}"
+        raise RuntimeError(msg)
 
 
 def build_a2_variants(base_dir: Path, selected_variants: list[str], ignore_git_check: bool = False) -> None:
-    """Verify baseline state, build selected A2-bis .aoe2scenario files, and verify SHA-256 restoration."""
+    """Verify baseline state, build selected A2-bis .aoe2scenario files 100% in memory, and verify SHA-256."""
     git_info = verify_git_baseline(base_dir)
     if git_info["git_available"] and not ignore_git_check:
         if git_info["dirty_core_files"]:
@@ -422,44 +444,60 @@ def build_a2_variants(base_dir: Path, selected_variants: list[str], ignore_git_c
             print(f"[OSTRZEZENIE] Aktualny HEAD ({git_info['head']}) rozni sie od {BASELINE_COMMIT}.")
 
     baseline_sums = compute_core_checksums(base_dir)
+    from AoE2ScenarioParser.scenarios.aoe2_de_scenario import AoE2DEScenario
     import generate_gondolin_scenario
     import gondolin_config
     import gondolin_map
     import gondolin_mechanics
     import gondolin_quests
 
+    scenario_folder = generate_gondolin_scenario.find_scenario_folder()
+    template_path = scenario_folder / generate_gondolin_scenario.TEMPLATE_FILENAME
+    if not template_path.exists():
+        local_fallback = base_dir / generate_gondolin_scenario.TEMPLATE_FILENAME
+        if local_fallback.exists():
+            template_path = local_fallback
+        else:
+            msg = f"Brak pliku szablonu: {template_path.resolve()}"
+            raise FileNotFoundError(msg)
+
     for v_key in selected_variants:
         if v_key not in A2_BIS_VARIANTS:
             msg = f"Nieznany wariant: {v_key}. Dostepne: {list(A2_BIS_VARIANTS.keys())}"
             raise ValueError(msg)
         v_cfg = A2_BIS_VARIANTS[v_key]
+        output_path = scenario_folder / v_cfg["output"]
+
         print("=" * 92)
-        print(f"[BUDOWANIE WARIANTU A2-bis: {v_key}] -> {v_cfg['output']}")
+        print(f"[BUDOWANIE WARIANTU A2-bis (W PAMIECI RAM): {v_key}] -> {output_path.name}")
         print(f"Opis: {v_cfg['desc']}")
         print("=" * 92)
 
-        with temporary_file_patches(base_dir, v_cfg):
-            importlib.reload(gondolin_config)
-            importlib.reload(gondolin_map)
-            importlib.reload(gondolin_mechanics)
-            importlib.reload(gondolin_quests)
-            importlib.reload(generate_gondolin_scenario)
+        with in_memory_config_patch(base_dir, v_cfg["config_replacements"]):
+            scenario = AoE2DEScenario.from_file(str(template_path))
+            scenario.trigger_manager.triggers = []
+            scenario.unit_manager.units = [[] for _ in range(9)]
+            scenario.map_manager.map_size = gondolin_config.MAP_SIZE
 
-            generate_gondolin_scenario.OUTPUT_FILENAME = v_cfg["output"]
-            generate_gondolin_scenario.generate_scenario()
+            gondolin_config.populate_ingame_scenario_descriptions(scenario)
+            ctx = gondolin_map.build_map_and_entities(scenario)
+            gondolin_mechanics.setup_init_auras_and_mechanics(scenario, ctx)
+            gondolin_quests.setup_sanctuary_quests_and_victory(scenario, ctx)
 
-    importlib.reload(gondolin_config)
-    importlib.reload(gondolin_map)
-    importlib.reload(gondolin_mechanics)
-    importlib.reload(gondolin_quests)
+            apply_in_memory_trigger_mutations(scenario, v_cfg)
+
+            scenario.write_to_file(str(output_path))
+            print(f"[OK] Wygenerowano plik: {output_path.resolve()}")
+            generate_gondolin_scenario.inspect_and_validate_scenario(output_path, ctx=ctx)
+
     final_sums = compute_core_checksums(base_dir)
     assert baseline_sums == final_sums, "Niezgodnosc SHA-256 po zakonczeniu budowania wariantow!"
-    print("[OK] Sumy kontrolne SHA-256 wszystkich 5 plikow rdzenia w 100% zgodne ze stanem bazowym.")
+    print("[OK] 0 zapisow do plikow .py na dysku; sumy kontrolne SHA-256 w 100% nienaruszone.")
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Etap A1/A2-bis: Diagnostyka ID, test looping+timer oraz generator odizolowanych wariantow."
+        description="Etap A1/A2-bis: Diagnostyka ID, test looping+timer oraz generator wariantow w pamieci RAM."
     )
     parser.add_argument(
         "--build-variant",
@@ -470,7 +508,7 @@ def main() -> None:
     parser.add_argument(
         "--ignore-git-check",
         action="store_true",
-        help="Pomin blokade czystego git status (przydatne tylko w srodowisku bez git).",
+        help="Pomin blokade czystego git status.",
     )
     args = parser.parse_args()
     base_dir = Path(__file__).parent
