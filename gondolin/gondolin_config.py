@@ -7,6 +7,7 @@ from typing import Any
 from AoE2ScenarioParser.datasets.players import PlayerId
 
 MAP_SIZE: int = 240
+DEBUG_CHAT: bool = False
 
 # Genie Engine Resource IDs
 RES_FOOD: int = 0
@@ -74,9 +75,9 @@ FLARE_UNIT_ID: int = 112
 ROCK_CLIFF_ID: int = 623
 SEA_ROCKS_ID: int = 389
 FIRE_TOWER_ID: int = 190
-FLAME_EFFECT_ID: int = 303
+FLAME_EFFECT_ID: int = 304  # OtherInfo.BONFIRE (permanent fire; replaces 303 UnitInfo.SEAGULLS)
 TORCH_ID: int = 499
-STATUE_ID: int = 817
+STATUE_ID: int = 1279  # OtherInfo.STATUE_CIVILIZATION (replaces 817 missing/unexposed slot)
 FLAG_A_ID: int = 600
 OAK_TREE_ID: int = 349
 PINE_TREE_ID: int = 350
@@ -109,6 +110,8 @@ MILL_ID: int = 68
 LUMBER_CAMP_ID: int = 562
 MINING_CAMP_ID: int = 584
 PAVILION_ID: int = 626
+ARMY_TENT_A_ID: int = 1196
+ARMY_TENT_B_ID: int = 1197
 FORTIFIED_WALL_ID: int = 155
 CITY_GATE_SW_NE_ID: int = 64
 CITY_GATE_NW_SE_ID: int = 88
@@ -117,35 +120,35 @@ PALISADE_GATE_X_ID: int = 789
 PALISADE_GATE_Y_ID: int = 793
 
 # Hero Unit IDs (Tracked strictly by object_list_unit_id + source_player, NEVER by reference_id!)
-HERO_TUOR_ID: int = 426  # Harald Hardraada (Great Axe Dramborleg)
-HERO_ROG_ID: int = 1066  # Edward Longshanks / Heavy Warlord
-HERO_ECTHELION_ID: int = 168  # Belisarius / Silver Lord of the Fountain
-HERO_EGALMOTH_ID: int = 682  # Henry V / Lord of the Heavenly Arch
-HERO_GLORFINDEL_ID: int = 172  # La Hire / Golden-haired Lord with broadsword
-HERO_DUILIN_ID: int = 428  # Hrolf the Ganger / Swallow Sniper Captain
-HERO_IDRIL_ID: int = 1292  # Queen (Idril Celebrindal)
-HERO_GALDOR_ID: int = 636  # Guy Josselyne / Tall Lord of the Tree
-HERO_EARENDIL_ID: int = 430  # Joan the Maid (Foot noble ward - replaces invalid 831 Turtle Ship)
-HERO_SALGANT_ID: int = 642  # William the Conqueror (Mounted Lord of the Harp)
-SANCTUARY_KING_ID: int = 434  # King unit isolated inside the Balance Sanctuary
+HERO_TUOR_ID: int = 426  # HeroInfo.HARALD_HARDRADA (Foot axe hero - Great Axe Dramborleg, class 4)
+HERO_ROG_ID: int = 432  # HeroInfo.WILLIAM_WALLACE (Foot champion hero - House of the Hammer, class 4)
+HERO_ECTHELION_ID: int = 168  # HeroInfo.THEODORIC_THE_GOTH (Foot swordsman - Silver Lord of the Fountain, class 4)
+HERO_EGALMOTH_ID: int = 200  # HeroInfo.ROBIN_HOOD (Foot archer - Heavenly Arch, class 3)
+HERO_GLORFINDEL_ID: int = 640  # HeroInfo.LA_HIRE (Foot greatsword hero - Golden Flower, class 4)
+HERO_DUILIN_ID: int = 642  # HeroInfo.LORD_DE_GRAVILLE (Foot archer hero - House of the Swallow, class 3)
+HERO_IDRIL_ID: int = 1066  # HeroInfo.YODIT (Royal warrior princess hero - Idril Celebrindal, class 4)
+HERO_GALDOR_ID: int = 636  # HeroInfo.SIEUR_BERTRAND (Mounted knight - Tall Lord of the Tree, class 4)
+HERO_EARENDIL_ID: int = 430  # HeroInfo.JOAN_THE_MAID (Protected noble ward, class 4)
+HERO_SALGANT_ID: int = 428  # HeroInfo.HROLF_THE_GANGER (Reserve constant, unused)
+SANCTUARY_KING_ID: int = 434  # UnitInfo.KING isolated inside the Balance Sanctuary
 
 # Player Retinue Unit IDs
 # P1: House of the Wing & House of the Hammer of Wrath
-UNIT_HAMMER_SMITH_ID: int = 1703  # Elite Obuch (strips enemy armor with warhammers)
-UNIT_WING_GUARD_ID: int = 693  # Elite Berserk (heavy axe infantry)
-UNIT_WING_CHAMPION_ID: int = 567  # Champion
+UNIT_HAMMER_SMITH_ID: int = 1703  # UnitInfo.ELITE_OBUCH (strips enemy armor with warhammers)
+UNIT_WING_GUARD_ID: int = 694  # UnitInfo.ELITE_BERSERK (replaces 693 Berserk corpse)
+UNIT_WING_CHAMPION_ID: int = 567  # UnitInfo.CHAMPION
 
 # P2: House of the Fountain & House of the Heavenly Arch
-UNIT_FOUNTAIN_GUARD_ID: int = 1661  # Elite Serjeant (silver shield infantry)
-UNIT_FOUNTAIN_HALB_ID: int = 359  # Halberdier
-UNIT_ARCH_LONGBOW_ID: int = 530  # Elite Longbowman
-UNIT_ARCH_RATTAN_ID: int = 1130  # Elite Rattan Archer
+UNIT_FOUNTAIN_GUARD_ID: int = 1661  # UnitInfo.ELITE_SERJEANT_DONJON (silver shield infantry)
+UNIT_FOUNTAIN_HALB_ID: int = 359  # UnitInfo.HALBERDIER (P2 only)
+UNIT_ARCH_LONGBOW_ID: int = 530  # UnitInfo.ELITE_LONGBOWMAN
+UNIT_ARCH_RATTAN_ID: int = 1131  # UnitInfo.ELITE_RATTAN_ARCHER (replaces 1130 Rattan Archer corpse)
 
 # P3: House of the Golden Flower & House of the Swallow
-UNIT_FLOWER_BLADE_ID: int = 882  # Condottiero (fast shock infantry)
-UNIT_FLOWER_CAV_ID: int = 569  # Paladin (mounted vanguard)
-UNIT_SWALLOW_SNIPER_ID: int = 469  # Elite Genoese Crossbowman
-UNIT_HARP_HEALER_ID: int = 125  # Monk (heals allies)
+UNIT_FLOWER_BLADE_ID: int = 882  # UnitInfo.CONDOTTIERO (fast shock infantry)
+UNIT_FLOWER_CAV_ID: int = 569  # UnitInfo.PALADIN (mounted vanguard)
+UNIT_SWALLOW_SNIPER_ID: int = 868  # UnitInfo.ELITE_GENOESE_CROSSBOWMAN (replaces 469 Trebuchet projectile)
+UNIT_HARP_HEALER_ID: int = 125  # UnitInfo.MONK (heals allies)
 
 # P4: House of the Tree & Wardens of the Secret Way
 UNIT_TREE_PIKE_ID: int = 1699  # Flemish Militia (heavy polearm infantry)
@@ -184,23 +187,23 @@ TRACKED_NOLDOR_HEROES: list[tuple[PlayerId, int, int, str]] = [
 ]
 
 # Enemy Unit IDs (P5: Angband Horde, P6: Iron Dragons, P7: Balrogs, P8: Maeglin's Traitors)
-ENEMY_ORC_INFANTRY_ID: int = 1124  # Elite Karambit Warrior (swarming Orcs)
-ENEMY_ORC_BRUTE_ID: int = 473  # Two-Handed Swordsman (Uruk heavy infantry)
-ENEMY_ORC_ARCHER_ID: int = 4  # Bowman / Orc Crossbowman
-ENEMY_ORC_CROSSBOW_ID: int = 24  # Crossbowman
-ENEMY_DIRE_WOLF_ID: int = 89  # Dire Wolf
-ENEMY_WARG_RIDER_ID: int = 756  # Elite Tarkhan (torch-wielding wolf/cavalry raider)
+ENEMY_ORC_INFANTRY_ID: int = 1125  # UnitInfo.ELITE_KARAMBIT_WARRIOR (replaces 1124 Karambit corpse)
+ENEMY_ORC_BRUTE_ID: int = 473  # UnitInfo.TWO_HANDED_SWORDSMAN (Uruk heavy infantry)
+ENEMY_ORC_ARCHER_ID: int = 4  # UnitInfo.ARCHER (Orc bowman)
+ENEMY_ORC_CROSSBOW_ID: int = 24  # UnitInfo.CROSSBOWMAN
+ENEMY_DIRE_WOLF_ID: int = 89  # UnitInfo.DIRE_WOLF
+ENEMY_WARG_RIDER_ID: int = 757  # UnitInfo.ELITE_TARKAN (replaces 756 Tarkhan corpse)
 
-ENEMY_IRON_DRAGON_RAM_ID: int = 548  # Siege Ram (armored transport dragon)
-ENEMY_FIRE_DRAKE_ID: int = 188  # Flamethrower (fire-breathing Uruloki machine)
-ENEMY_HEAVY_SCORPION_ID: int = 542  # Heavy Scorpion
+ENEMY_IRON_DRAGON_RAM_ID: int = 548  # UnitInfo.SIEGE_RAM (armored transport dragon)
+ENEMY_FIRE_DRAKE_ID: int = 188  # UnitInfo.FLAMETHROWER (fire-breathing Uruloki machine)
+ENEMY_HEAVY_SCORPION_ID: int = 542  # UnitInfo.HEAVY_SCORPION
 
-ENEMY_BALROG_BOSS_ID: int = 1737  # Elite Urumi Swordsman (whip of fire & splash damage)
-ENEMY_GOTHMOG_ID: int = 1713  # Savar / High Lord of Balrogs
+ENEMY_BALROG_BOSS_ID: int = 1737  # UnitInfo.ELITE_URUMI_SWORDSMAN (whip of fire & splash damage)
+ENEMY_GOTHMOG_ID: int = 1713  # HeroInfo.JAN_ZIZKA (High Lord of Balrogs)
 
-ENEMY_MOLE_TRAITOR_ID: int = 878  # Elite Boyar (heavy dark armor with pick/axe)
-ENEMY_MOLE_PIKE_ID: int = 532  # Elite Teutonic Knight (Maeglin's Royal Guard)
-ENEMY_MAEGLIN_ID: int = 640  # Mordred / Traitor Prince of the Mole
+ENEMY_MOLE_TRAITOR_ID: int = 878  # UnitInfo.ELITE_BOYAR (heavy dark armor)
+ENEMY_MOLE_PIKE_ID: int = 892  # UnitInfo.HEAVY_PIKEMAN (replaces 532 Fast Fire Ship; avoids P2 359)
+ENEMY_MAEGLIN_ID: int = 176  # HeroInfo.MORDRED (Dark armored Traitor Prince, melee class 4)
 
 # Canonical lore unit names for P1-P8 (applied to initial & dynamically spawned units)
 UNIT_DISPLAY_NAMES: dict[int, str] = {
@@ -319,9 +322,13 @@ BALANCE: dict[str, Any] = {
     "soft_cap_dominance_threshold": 28,   # 15..28 -> Standard Pack; >= 29 military units -> Dominance Bonus
     "mid_encounter_escalation_delay": 20, # Seconds before checking if players crushed base wave
     "mid_encounter_military_min": 8,      # Minimum military units in sector to trigger Elite Ambush
+    "dragon_drop_interval_seconds": 32,   # Periodic Orc drop interval for P6 Iron Dragons
+    "dragon_drop_p5_pop_cap": 65,         # Pause P6 Orc drops if P5 already has > 65 military units alive
+    "dragon_drop_zone_congestion_max": 10, # Pause local corridor drop if >= 10 P5 military units still crowd zone
     "sanctuary_harder_hp_add": 20,
     "sanctuary_harder_atk_add": 2,
-    "sanctuary_easier_hp_mult": 0.85,
+    "sanctuary_easier_hp_sub": 10,
+    "sanctuary_easier_atk_sub": 1,
     "glory_scores": {
         "refugee_group_saved": 150,
         "side_quest_completed": 300,
@@ -424,10 +431,84 @@ BALANCE: dict[str, Any] = {
             "blast": 0.0,
         },
     },
+    "enemies": {
+        ENEMY_ORC_INFANTRY_ID: {
+            "name": "Ork z Angbandu",
+            "hp": 95,
+            "atk": 15,
+            "atk_class": ARMOR_CLASS_MELEE,
+            "melee_armor": 2,
+            "pierce_armor": 2,
+        },
+        ENEMY_ORC_BRUTE_ID: {
+            "name": "Ciezki Uruk Morgotha",
+            "hp": 185,
+            "atk": 22,
+            "atk_class": ARMOR_CLASS_MELEE,
+            "melee_armor": 4,
+            "pierce_armor": 4,
+        },
+        ENEMY_ORC_ARCHER_ID: {
+            "name": "Lucznik Orkow",
+            "hp": 75,
+            "atk": 11,
+            "atk_class": ARMOR_CLASS_PIERCE,
+            "melee_armor": 1,
+            "pierce_armor": 2,
+        },
+        ENEMY_ORC_CROSSBOW_ID: {
+            "name": "Kusznik z Angbandu",
+            "hp": 95,
+            "atk": 14,
+            "atk_class": ARMOR_CLASS_PIERCE,
+            "melee_armor": 2,
+            "pierce_armor": 3,
+        },
+        ENEMY_DIRE_WOLF_ID: {
+            "name": "Wilk z Thangorodrimu",
+            "hp": 110,
+            "atk": 16,
+            "atk_class": ARMOR_CLASS_MELEE,
+            "melee_armor": 2,
+            "pierce_armor": 2,
+        },
+        ENEMY_WARG_RIDER_ID: {
+            "name": "Jezdziec Wargow",
+            "hp": 180,
+            "atk": 20,
+            "atk_class": ARMOR_CLASS_MELEE,
+            "melee_armor": 4,
+            "pierce_armor": 5,
+        },
+        ENEMY_HEAVY_SCORPION_ID: {
+            "name": "Balista Obleznicza Angbandu",
+            "hp": 150,
+            "atk": 20,
+            "atk_class": ARMOR_CLASS_PIERCE,
+            "melee_armor": 2,
+            "pierce_armor": 7,
+        },
+        ENEMY_MOLE_TRAITOR_ID: {
+            "name": "Gwardzista Domu Kreta (Zdrajca)",
+            "hp": 210,
+            "atk": 22,
+            "atk_class": ARMOR_CLASS_MELEE,
+            "melee_armor": 5,
+            "pierce_armor": 5,
+        },
+        ENEMY_MOLE_PIKE_ID: {
+            "name": "Pikinier Maeglina (Dom Kreta)",
+            "hp": 190,
+            "atk": 20,
+            "atk_class": ARMOR_CLASS_MELEE,
+            "melee_armor": 4,
+            "pierce_armor": 4,
+        },
+    },
     "bosses": {
         ENEMY_MAEGLIN_ID: {
             "name": "Maeglin Zdrajca (Ksiaze Domu Kreta)",
-            "hp": 2200,
+            "hp": 2000,
             "atk": 32,
             "melee_armor": 6,
             "pierce_armor": 6,
@@ -517,7 +598,10 @@ def populate_ingame_scenario_descriptions(scenario: Any) -> None:
         "padnie kolejny bohater, odradza sie on bez zuzycia kolejnej Pieczeci (lecz bez dodatkowych 6 Gwardzistow).\n\n"
         "3. PUNKTY CHWALY (ZLOTO) I SOFT-CAP ARMII:\n"
         "- Zloto Gracza 1 mierzy Wasz wynik (High Score). W punktach przegrupowania wielkosc calej armii "
-        "wojskowej kazdego gracza (0..14, 15..28, 29+) decyduje o przydziale posilkow lub premii Chwaly."
+        "wojskowej kazdego gracza (0..14, 15..28, 29+) decyduje o przydziale posilkow lub premii Chwaly.\n"
+        "- SANKTUARIUM BALANSU (lewy gorny naroznik NW): Powiernik (Krol P1) moze swobodnie zmieniac poziom "
+        "w obu kierunkach miedzy -2 a +2: krok w GORE ekranu (ku plomieniom) podnosi trudnosc (+1/+2), "
+        "a krok w DOL ekranu (ku choragwiom) obniza trudnosc (-1/-2). Pierwsze 50 sekund to czas na przygotowania!"
     )
 
     mm.hints = (

@@ -45,8 +45,8 @@ def _ensure_aoe2_parser_or_mock() -> bool:
             ROAD_FUNGUS = 38
 
         class Operation(IntEnum):
-            ADD = 1
-            SET = 2
+            SET = 1
+            ADD = 2
             SUBTRACT = 3
             MULTIPLY = 4
 

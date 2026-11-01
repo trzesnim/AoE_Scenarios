@@ -26,14 +26,14 @@ W dotychczasowych 17 uruchomieniach testowych wariantów `A2` zaobserwowano dwa 
 
 Ponieważ wariant bazowy i pojedyncze podmiany `532` lub `682` zachowują się niedeterministycznie (potrafią przetrwać 3 minuty w jednej próbie i zawiesić się w kolejnej), żadnej przyczyny nie uznaje się za udowodnioną przed wykonaniem izolowanych testów `A2-bis`:
 
-* **Hipoteza H1 (Kumulacja obiektów przez `looping = True` + `timer = 32` w `P6_Dragon_Drop_*`):**
+* **Hipoteza H1 (Kumulacja obiektów przez `looping = True` + `timer = 32` w `P6_Dragon_Drop_*`) — [ZWERYFIKOWANA NEGATYWNIE 2026-11-01]:**
 * W kodzie `gondolin_mechanics.py` pięć triggerów `P6_Dragon_Drop_*` posiada ustawione jednocześnie `looping = True`, warunek `timer = 32` oraz warunek `objects_in_area` badający obecność tarana P6 (`548`).
 
 
-* Początkowy taran P6 stoi od `0:00` na współrzędnych `(102, 63)` wewnątrz strefy `east_avenue_Z0 (92, 57, 104, 69)`, przez co warunek obecności tarana w tej strefie jest spełniony od pierwszej sekundy gry, nawet przy wyłączonym spawnie P6 z `0:15`.
+* Początkowy taran P6 stoi od `0:00` na współrzędnych `(102, 63)` wewnątrz strefy `east_avenue_Z0 (92, 57, 104, 69)`, przez co warunek obecności tarana w tej strefie był spełniony od pierwszej sekundy gry, nawet przy wyłączonym spawnie P6 z `0:15`.
 
 
-* Zgodnie z dokumentacją silnika Genie warunek `Timer` sprawdza upływ czasu od aktywacji triggera, a `looping = True` ponawia wykonanie raz na sekundę. Jeżeli po osiągnięciu `0:32` timer nie resetuje się, trigger `P6_Dragon_Drop_east_avenue_Z0` spawnuje 9 obiektów (w tym 5 obiektów zwłok `1124`) co 1 sekundę na kafelku `(98, 63)`, prowadząc do lawinowego przyrostu setek obiektów w jednym punkcie i przeciążenia silnika między `0:34` a `2:47`.
+* **Wynik sondy `Gondolin_A2B_T1_LoopTimerProbe5s` (`2026-11-01`):** Silnik Genie poprawnie resetuje licznik `Timer` w trybie `looping = True` (efekt wykonuje się co `N` sekund, a nie co 1 sekundę). Hipoteza awarii przez sam mechanizm `looping + timer` została **odrzucona**; zrzuty w `0:32` powodowały natomiast cykliczne tworzenie obiektów zwłok `1124` i wydawanie im rozkazu `attack_move` (patrz H2). Mimo to w Kroku S4 dodano uzbrojenie zrzutów dopiero od `0:15`, globalny limit populacji P5 (`65`) oraz lokalny limit zatłoczenia strefy (`10`).
 
 
 * **Hipoteza H2 (Operacje na identyfikatorach zwłok i pocisków w `0:00` i `0:03`):**
@@ -60,29 +60,33 @@ Ponieważ wariant bazowy i pojedyncze podmiany `532` lub `682` zachowują się n
 
 ### 1.3. Zaplanowane kroki diagnostyczne i naprawcze stabilności
 
-1. **Krok S1 — Empiryczny pomiar semantyki `Looping + Timer` (`a2_t1_loop_timer_probe`):**
+1. **Krok S1 — Empiryczny pomiar semantyki `Looping + Timer` (`a2_t1_loop_timer_probe`) — [WYKONANO]:**
 * Uruchomienie odizolowanego, minimalnego scenariusza `Gondolin_A2B_T1_LoopTimerProbe5s.aoe2scenario` (zawierającego wyłącznie 1 trigger z `looping = True` i `timer = 5`, dodający `+1` Złota P1 i `+1` żywego Czempiona `567` na pustej mapie trawiastej bez AI i bez błędnych ID).
 
 
-* Obserwacja w `0:00 – 0:15` rozstrzygnie jednoznacznie, czy efekt wykonuje się raz w `0:05`, co 5 sekund, czy co 1 sekundę od `0:05`.
+* Pomiar w `0:00 – 0:15` potwierdził wykonywanie efektu co 5 sekund (`0:05`, `0:10`, `0:15`) — licznik `Timer` resetuje się automatycznie.
 
 
 
 
 2. **Krok S2 — Izolacja wpływu zrzutów P6 (`a2_b3a`, `a2_b3b`, `a2_b3c`):**
-* Osobne przetestowanie wyłączenia samego `P6_Dragon_Drop_east_avenue_Z0` (`a2_b3a`), wyłączenia wszystkich 5 triggerów zrzutów z `0:32` (`a2_b3b`) oraz wyłączenia samego spawnu P6 z `0:15` (`a2_b3c`).
+* Rezerwowy krok izolacyjny na wypadek utrzymywania się CTD w grze po wdrożeniu Kroku S4.
 
 
 
 
 3. **Krok S3 — Pojedyncza izolacja każdego błędnego ID (`a2_b1a` .. `a2_b1g`) oraz triggera `Init_03s` (`a2_b2`):**
-* Przetestowanie pojedynczych podmian: `693 -> 694` (`a2_b1a`), `1124 -> 1125` (`a2_b1b`), `1130 -> 1131` (`a2_b1c`), `469 -> 868` (`a2_b1d`), `756 -> 757` (`a2_b1e`), `532 -> 892` (`a2_b1f`), `682 -> 200` (`a2_b1g`) oraz wyłączenia `Init_03s` (`a2_b2`), a następnie wariantu łącznego `a2_b1_all_valid_units`.
+* Rezerwowy krok izolacyjny (`Gondolin_A2B_1a..1g` w `stage_a1_diagnostic_and_variants.py`), uruchamiany wyłącznie gdyby po łącznej naprawie w Kroku S4 utrzymał się jakikolwiek crash w grze.
 
 
 
 
-4. **Krok S4 — Przebudowa pętli zrzutów P6 i trwała wymiana błędnych ID:**
-* Zastąpienie wszystkich ID zwłok, pocisków, statków i trebuszy prawidłowymi żywymi jednostkami z `UnitInfo` / `HeroInfo` oraz przebudowa mechanizmu `P6_Dragon_Drop_*` na kontrolowane przekaźniki falowe z limitem populacji.
+4. **Krok S4 — Przebudowa pętli zrzutów P6, trwała wymiana błędnych ID i strażnik przed zapisem — [WDROŻONO W KODZIE]:**
+* Wymieniono wszystkie 7 błędnych ID w `gondolin_config.py` (`693->694`, `1124->1125`, `1130->1131`, `756->757`, `469->868`, `532->892`, `682->200`), zaktualizowano `HERO_RANGED_IDS` (`{200, 172}`), naprawiono bezczasowy cykl `#317`/`#318` w `gondolin_quests.py`, przebudowano `P6_Dragon_Drop_*` (start wyłączony do `0:15`, limit `P5 <= 65`, anty-tłok strefy `< 10`, dezaktywacja w Fazie II) oraz dodano blokadę `assert_no_dead_or_projectile_ids_before_write` w `generate_gondolin_scenario.py` (`8/8 PASS` w `validate_scenario.py`).
+
+5. **Krok S5 — Eliminacja zawieszeń wątku głównego `AppHangB1` (`PromiDE` `Sig[3]=185d`) oraz wtórnych błędów binarnych po analizie 3 testów z `DEBUG_CHAT` (`0:19`, `1:33`, `3:09`) — [WDROŻONO W KODZIE]:**
+* Analiza raportów Windows WER (`AppHangB1`, `Sig[3]=185d`, `BucketId=e77d218807b758d7b04fb0f739587106`) oraz strumieni binarnych `.aoe2record` z 3 prób (`19,979 ms`, `93,527 ms`, `190,046 ms`) udowodniła, że główną przyczyną zawieszeń nie były same triggery rytmiczne (`#3`, `#6`, `#147`, `#246`), lecz domyślny silnik `PromiDE` (`AiType.STANDARD`) aktywny na slotach AI (`P2–P8`) na mapie RPG bez TC/wieśniaków, z hermetycznie zamkniętymi sektorami `ROCK_CLIFF_ID` (`623`), który wpadał w nieskończoną pętlę pathfindingu/taktyki C++ (`ACT cmd=0x0a AI_ORDER 0x02c2 (-1, -1)` ×12 w jednej klatce).
+* Zablokowano `PromiDE` na wszystkich graczach `P1–P8` poprzez `set_immobile_ai()` (`AiType.CUSTOM`) + `lock_personality = True` (z zachowaniem `human = True` na `P1–P4`), naprawiono mapowanie `Civilization` i wzmocniono dyplomację w `0:01` (`change_diplomacy`), wymieniono brakujący w datasetach obiekt `STATUE_ID = 817 -> 1279` (`OtherInfo.STATUE_CIVILIZATION`) oraz `FLAME_EFFECT_ID = 303 -> 304` (`OtherInfo.BONFIRE`), wyeliminowano obcięcie float->int=`0` przy `Operation.MULTIPLY` na `HIT_POINTS` (`#18`, `#19`, `#282` -> `Operation.SUBTRACT`), dodano `object_type=OBJECT_TYPE_MILITARY` do wszystkich obszarowych `damage_object`/`kill_object` oraz warunek `timer=999999` do wszystkich 18 banerów `UI_*` (`10/10 PASS` w `validate_scenario.py`).
 
 
 
@@ -464,7 +468,9 @@ Każdy etap podlega trójpoziomowej weryfikacji:
 * *Poziom 1, 2 i 3:* 100% PASS w `test_stage_a_logic.py`, `test_stage_b_grid.py` i `generate_gondolin_scenario.py` oraz końcowy test przejścia Faz I–III w grze *AoE2: DE*.
 
 - [x] **Weryfikacja pętli `looping = True` + `Timer`:** Zbadano empirycznie plikiem `Gondolin_A2B_T1_LoopTimerProbe5s`. Mechanizm działa poprawnie, wykonując akcje co 5 sekund. Hipoteza awarii silnika przez pętle czasowe ODRZUCONA.
-- [ ] **Izolacja Runtime CTD w triggerach:** Skupić automatyczną walidację i audyt na:
+- [x] **Narzędzia diagnostyczne Runtime CTD (`validate_scenario.py` + `DEBUG_CHAT`):** Wdrożono automatyczny zestaw testów `pytest` (6 klas błędów CTD: `armour_attack_class`, pętle bez `Timer >= 1`, odwrócone prostokąty obszarów, wyjście poza granice mapy, operacje na usuniętych obiektach oraz operacje na obiektach zwłok `DEAD_ID` i pociskach `ProjectileInfo`) oraz instrumentację `inject_debug_chat_into_triggers` (`DEBUG_CHAT = True`, 1 efekt `Send Chat` dla P1 na początku każdego z 322 triggerów).
+- [x] **Izolacja i naprawa Runtime CTD w triggerach oraz ID jednostek:** Naprawiono wszystkie błędy wykryte przez `validate_scenario.py` oraz audyt (`8/8 PASS` w `pytest`, `100% PASS` w `test_stage_a_logic.py` i `test_stage_b_grid.py`): wymieniono 7 błędnych ID (`693->694`, `1124->1125`, `1130->1131`, `756->757`, `469->868`, `532->892`, `682->200`), skorygowano `HERO_RANGED_IDS`, usunięto bezczasową pętlę `#317`/`#318`, zabezpieczono `P6_Dragon_Drop_*` limitem populacji i anty-tłokiem oraz dodano strażnika przed zapisem w `generate_gondolin_scenario.py` (pozostawiono `DEBUG_CHAT = True` do weryfikacji 3× 3–5 min w grze), przy pełnej walidacji na:
   1. Brakujących klasach pancerza/ataku w `Modify Attribute` (`armour_attack_class`).
   2. Spójności referencji ID jednostek po ich zniszczeniu/śmierci.
   3. Weryfikacji prostokątów obszarów (`x1 <= x2` oraz `y1 <= y2`).
+- [x] **Eliminacja zawieszeń `AppHangB1` (`PromiDE` `Sig[3]=185d`) i błędów binarnych po testach `0:19 / 1:33 / 3:09`:** Po analizie plików `.aoe2record` i raportów WER wdrożono blokadę `set_immobile_ai()` + `lock_personality = True` na `P1–P8`, poprawne enumy `Civilization` i `change_diplomacy` w `0:01`, wymianę nieznanego ID `817 -> 1279` oraz `303 -> 304`, zamianę `Operation.MULTIPLY` (`qty=0` na `HIT_POINTS`) na całkowitoliczbowe `Operation.SUBTRACT`, filtrowanie obszarowego `damage_object`/`kill_object` (`OBJECT_TYPE_MILITARY`), warunki `timer=999999` na 18 banerach `UI_*` oraz rozbudowę walidatora do `10/10 PASS` w `pytest validate_scenario.py`.

@@ -49,6 +49,7 @@ from gondolin_config import (
     VULTURE_ID,
 )
 from gondolin_mechanics import (
+    HERO_RANGED_IDS,
     PLAYER_MELEE_RETINUE,
     PLAYER_RANGED_RETINUE,
     add_chat_and_flare,
@@ -262,15 +263,13 @@ def _setup_balance_sanctuary(tm: Any, ctx: dict[str, Any]) -> None:
     )
     add_enemy_combat_buff(
         t_easy_1,
-        hp_delta=0,
+        hp_delta=-BALANCE["sanctuary_easier_hp_sub"],
         atk_delta=0,
-        use_multiply_hp=True,
-        hp_mult=BALANCE["sanctuary_easier_hp_mult"],
     )
     award_glory_gold(
         t_easy_1,
         BALANCE["glory_scores"]["difficulty_minus_1"],
-        "<GREEN>[Sanktuarium Balansu -1] Pancerze wroga oslabione (-15% HP)! Koszt: -500 Chwaly.",
+        "<GREEN>[Sanktuarium Balansu -1] Pancerze wroga oslabione (-10 HP)! Koszt: -500 Chwaly.",
     )
     safe_call(
         t_easy_1.new_effect.activate_trigger,
@@ -307,15 +306,13 @@ def _setup_balance_sanctuary(tm: Any, ctx: dict[str, Any]) -> None:
     )
     add_enemy_combat_buff(
         t_easy_2,
-        hp_delta=0,
+        hp_delta=-BALANCE["sanctuary_easier_hp_sub"],
         atk_delta=0,
-        use_multiply_hp=True,
-        hp_mult=BALANCE["sanctuary_easier_hp_mult"],
     )
     award_glory_gold(
         t_easy_2,
         minus_2_delta,
-        "<GREEN>[Sanktuarium Balansu -2 (Minimum)] Pancerze wroga ponownie oslabione (lacznie -1000 Chwaly). Sanktuarium zamkniete.",
+        "<GREEN>[Sanktuarium Balansu -2 (Minimum)] Pancerze wroga ponownie oslabione (lacznie -20 HP, -1000 Chwaly). Sanktuarium zamkniete.",
     )
 
 
@@ -326,6 +323,7 @@ def _setup_three_seals_of_turgon(tm: Any, ctx: dict[str, Any]) -> dict[str, Any]
         enabled=True,
         looping=False,
     )
+    safe_call(t_seals_ui.new_condition.timer, timer=999999)
     t_seals_ui.short_description = "[CHWALA] Pieczecie Rezerwy Turgona: 3/3 | Wynik Chwaly = Zloto P1"
     t_seals_ui.display_on_screen = 1
     t_seals_ui.description_order = 115
@@ -335,6 +333,7 @@ def _setup_three_seals_of_turgon(tm: Any, ctx: dict[str, Any]) -> dict[str, Any]
         enabled=False,
         looping=False,
     )
+    safe_call(t_seals_2_ui.new_condition.timer, timer=999999)
     t_seals_2_ui.short_description = "[CHWALA] Pieczecie Rezerwy Turgona: 2/3 (1 zuzyta!)"
     t_seals_2_ui.display_on_screen = 1
     t_seals_2_ui.description_order = 115
@@ -344,6 +343,7 @@ def _setup_three_seals_of_turgon(tm: Any, ctx: dict[str, Any]) -> dict[str, Any]
         enabled=False,
         looping=False,
     )
+    safe_call(t_seals_1_ui.new_condition.timer, timer=999999)
     t_seals_1_ui.short_description = "[CHWALA] Pieczecie Rezerwy Turgona: 1/3 (UWAGA: Ostatnia Pieczec!)"
     t_seals_1_ui.display_on_screen = 1
     t_seals_1_ui.description_order = 115
@@ -353,6 +353,7 @@ def _setup_three_seals_of_turgon(tm: Any, ctx: dict[str, Any]) -> dict[str, Any]
         enabled=False,
         looping=False,
     )
+    safe_call(t_seals_0_ui.new_condition.timer, timer=999999)
     t_seals_0_ui.short_description = "[ALARM] Pieczecie Rezerwy: 0/3 - Kolejna smierc Bohatera oznacza PORAZKE!"
     t_seals_0_ui.display_on_screen = 1
     t_seals_0_ui.description_order = 115
@@ -700,6 +701,7 @@ def _setup_phase1_city_and_dilemmas(tm: Any, ctx: dict[str, Any]) -> list[Any]:
 
     def add_p1_objective(name: str, text: str, order: int) -> Any:
         trig = tm.add_trigger(name=name, enabled=True, looping=False)
+        safe_call(trig.new_condition.timer, timer=999999)
         trig.short_description = text
         trig.display_on_screen = 1
         trig.description_order = order
@@ -867,6 +869,7 @@ def _setup_phase1_city_and_dilemmas(tm: Any, ctx: dict[str, Any]) -> list[Any]:
     safe_call(
         t_aqueduct_done.new_effect.damage_object,
         source_player=PlayerId.SIX,
+        object_type=OBJECT_TYPE_MILITARY,
         area_x1=mx1,
         area_y1=40,
         area_x2=mx2,
@@ -903,7 +906,7 @@ def _setup_phase1_city_and_dilemmas(tm: Any, ctx: dict[str, Any]) -> list[Any]:
     for rx, ry in [(61, 108), (94, 63), (24, 63), (92, 26)]:
         spawn_progressive_revealer(t_snow_tower, rx, ry, player=PlayerId.ONE)
     for p_id in (PlayerId.TWO, PlayerId.THREE):
-        for r_id in (UNIT_ARCH_LONGBOW_ID, UNIT_ARCH_RATTAN_ID, UNIT_SWALLOW_SNIPER_ID, HERO_DUILIN_ID):
+        for r_id in (UNIT_ARCH_LONGBOW_ID, UNIT_ARCH_RATTAN_ID, UNIT_SWALLOW_SNIPER_ID, *sorted(HERO_RANGED_IDS)):
             safe_call(
                 t_snow_tower.new_effect.modify_attribute,
                 source_player=p_id,
@@ -1194,6 +1197,7 @@ def _setup_phase2_gothmog_and_tumladen(
 
     def add_p2_objective(name: str, text: str, order: int) -> Any:
         trig = tm.add_trigger(name=name, enabled=False, looping=False)
+        safe_call(trig.new_condition.timer, timer=999999)
         trig.short_description = text
         trig.display_on_screen = 1
         trig.description_order = order
@@ -1247,6 +1251,8 @@ def _setup_phase2_gothmog_and_tumladen(
     for st_idx in (1, 2, 3):
         safe_call(t_gothmog_slain.new_effect.deactivate_trigger, trigger_id=ctx["_all_seal_heal_loops"][st_idx]["phase1"].trigger_id)
         safe_call(t_gothmog_slain.new_effect.deactivate_trigger, trigger_id=ctx["_all_seal_heal_stops"][st_idx]["phase1"].trigger_id)
+    for drop_tid in ctx.get("dragon_drop_trigger_ids", []):
+        safe_call(t_gothmog_slain.new_effect.deactivate_trigger, trigger_id=drop_tid)
 
     for old_ui in phase1_ui_triggers:
         safe_call(
@@ -1366,6 +1372,7 @@ def _setup_phase2_gothmog_and_tumladen(
         safe_call(
             t_mine.new_effect.damage_object,
             source_player=PlayerId.FIVE,
+            object_type=OBJECT_TYPE_MILITARY,
             area_x1=q_bldgs[camp_key]["x"] - 8,
             area_y1=q_bldgs[camp_key]["y"] - 8,
             area_x2=q_bldgs[camp_key]["x"] + 8,
@@ -1446,8 +1453,8 @@ def _setup_phase2_gothmog_and_tumladen(
         source_player=PlayerId.SEVEN,
         object_list_unit_id=ENEMY_BALROG_BOSS_ID,
         object_attributes=ATTR_HIT_POINTS,
-        operation=Operation.MULTIPLY,
-        quantity=0.80,
+        operation=Operation.SUBTRACT,
+        quantity=560,
     )
     award_glory_gold(
         t_altar_destroyed,
@@ -1479,6 +1486,7 @@ def _setup_phase3_orfalch_and_cirith_victory(
 
     def add_p3_objective(name: str, text: str, order: int) -> Any:
         trig = tm.add_trigger(name=name, enabled=False, looping=False)
+        safe_call(trig.new_condition.timer, timer=999999)
         trig.short_description = text
         trig.display_on_screen = 1
         trig.description_order = order
@@ -1585,6 +1593,7 @@ def _setup_phase3_orfalch_and_cirith_victory(
         safe_call(
             t_winch.new_effect.damage_object,
             source_player=PlayerId.FIVE,
+            object_type=OBJECT_TYPE_MILITARY,
             area_x1=gx - 7,
             area_y1=gy - 7,
             area_x2=gx + 7,
@@ -1690,12 +1699,12 @@ def _setup_phase3_orfalch_and_cirith_victory(
     t_duel_left_spur = tm.add_trigger(
         name="P3_Finale_Glorfindel_LeftSpur",
         enabled=False,
-        looping=True,
+        looping=False,
     )
     t_duel_reenter_spur = tm.add_trigger(
         name="P3_Finale_Glorfindel_ReenterSpur",
         enabled=False,
-        looping=True,
+        looping=False,
     )
     # Path B: Canonical heroic sacrifice of Glorfindel after engaging the Balrog on the Spur
     t_thorondor_sacrifice = tm.add_trigger(
@@ -1725,6 +1734,7 @@ def _setup_phase3_orfalch_and_cirith_victory(
     )
 
     # If Glorfindel steps off the Spur while alive, pause/reset Hold25s until he re-enters the Spur
+    safe_call(t_duel_left_spur.new_condition.timer, timer=1)
     safe_call(
         t_duel_left_spur.new_condition.objects_in_area,
         source_player=PlayerId.THREE,
@@ -1873,6 +1883,7 @@ def _setup_phase3_orfalch_and_cirith_victory(
     safe_call(
         t_thorondor.new_effect.kill_object,
         source_player=PlayerId.SEVEN,
+        object_type=OBJECT_TYPE_MILITARY,
         area_x1=ct_x1 - 4,
         area_y1=ct_y1 - 4,
         area_x2=dl_x2 + 4,
@@ -1881,6 +1892,7 @@ def _setup_phase3_orfalch_and_cirith_victory(
     safe_call(
         t_thorondor.new_effect.kill_object,
         source_player=PlayerId.FIVE,
+        object_type=OBJECT_TYPE_MILITARY,
         area_x1=ct_x1 - 4,
         area_y1=ct_y1 - 4,
         area_x2=dl_x2 + 4,

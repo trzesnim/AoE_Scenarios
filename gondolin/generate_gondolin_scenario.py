@@ -7,8 +7,10 @@ from typing import Any
 
 from AoE2ScenarioParser.datasets.players import PlayerId
 from AoE2ScenarioParser.scenarios.aoe2_de_scenario import AoE2DEScenario
+import gondolin_config
 from gondolin_config import (
     BALANCE,
+    DEBUG_CHAT,
     MAP_REVEALER_ID,
     MAP_SIZE,
     OAK_TREE_ID,
@@ -16,8 +18,20 @@ from gondolin_config import (
     populate_ingame_scenario_descriptions,
 )
 from gondolin_map import build_map_and_entities
-from gondolin_mechanics import setup_init_auras_and_mechanics
+from gondolin_mechanics import (
+    inject_debug_chat_into_triggers,
+    setup_init_auras_and_mechanics,
+)
 from gondolin_quests import setup_sanctuary_quests_and_victory
+from validate_scenario import (
+    build_dead_and_projectile_catalog,
+    build_valid_live_object_catalog,
+    check_ai_players_locked_immobile,
+    check_dead_or_projectile_unit_operations,
+    check_modify_attribute_classes,
+    check_trigger_loops_have_timer,
+    check_ui_and_area_damage_safety,
+)
 
 TEMPLATE_FILENAME: str = "template.aoe2scenario"
 OUTPUT_FILENAME: str = "Silmarillion_Upadek_Gondolinu_Coop.aoe2scenario"
@@ -95,8 +109,49 @@ def inspect_and_validate_scenario(output_path: Path, ctx: dict[str, Any] | None 
     print("=" * 82 + "\n")
 
 
+def assert_no_dead_or_projectile_ids_before_write(scenario: Any | None = None) -> None:
+    """Abort generation if any *_ID constant or scenario trigger/AI state violates runtime CTD/AppHangB1 safety."""
+    dead_map, proj_map = build_dead_and_projectile_catalog()
+    valid_live_ids = build_valid_live_object_catalog()
+    bad_consts: list[str] = []
+    for attr_name, val in sorted(vars(gondolin_config).items()):
+        if not attr_name.endswith("_ID") or isinstance(val, bool) or not isinstance(val, int):
+            continue
+        if val in dead_map:
+            bad_consts.append(f"{attr_name}={val} -> OBIEKT_ZWLOK [{dead_map[val]}]")
+        elif val in proj_map:
+            bad_consts.append(f"{attr_name}={val} -> POCISK [{proj_map[val]}]")
+        elif val not in valid_live_ids:
+            bad_consts.append(f"{attr_name}={val} -> NIEZNANY_OBIEKT [brak w oficjalnych datasetach AoE2ScenarioParser]")
+    if bad_consts:
+        joined = "\n  - ".join(bad_consts)
+        msg = (
+            f"[BLAD KRYTYCZNY KONFIGURACJI] Wykryto {len(bad_consts)} stalych *_ID wskazujacych "
+            f"na obiekty zwlok, pociskow lub nieznanych slotow:\n  - {joined}"
+        )
+        raise RuntimeError(msg)
+
+    if scenario is not None:
+        for check_label, check_fn in (
+            ("operacji na zwlokach/pociskach/nieznanych ID", check_dead_or_projectile_unit_operations),
+            ("petli triggerow bez Timer >= 1", check_trigger_loops_have_timer),
+            ("uszkodzonych Modify Attribute (w tym 0 Max HP)", check_modify_attribute_classes),
+            ("niezablokowanego PromiDE (AppHangB1)", check_ai_players_locked_immobile),
+            ("banerow UI bez warunkow lub niefiltrowanego DAMAGE/KILL", check_ui_and_area_damage_safety),
+        ):
+            errs = check_fn(scenario)
+            if errs:
+                preview = "\n  - ".join(errs[:20])
+                msg = (
+                    f"[BLAD KRYTYCZNY PRZED ZAPISEM] Wykryto {len(errs)} bledow ({check_label}):\n"
+                    f"  - {preview}"
+                )
+                raise RuntimeError(msg)
+
+
 def generate_scenario() -> None:
     """Load template.aoe2scenario, build Gondolin map/mechanics/quests, write output, and validate."""
+    assert_no_dead_or_projectile_ids_before_write()
     scenario_folder = find_scenario_folder()
     template_path = scenario_folder / TEMPLATE_FILENAME
     if not template_path.exists():
@@ -124,6 +179,13 @@ def generate_scenario() -> None:
     setup_init_auras_and_mechanics(scenario, ctx)
     setup_sanctuary_quests_and_victory(scenario, ctx)
 
+    if DEBUG_CHAT:
+        injected_count = inject_debug_chat_into_triggers(scenario.trigger_manager)
+        print(
+            f"[DEBUG_CHAT] Wstrzyknieto Send Chat na poczatek {injected_count} triggerow (odbiorca: P1)."
+        )
+
+    assert_no_dead_or_projectile_ids_before_write(scenario)
     scenario.write_to_file(str(output_path))
     print(f"[OK] Wygenerowano scenariusz bezposrednio do folderu gry: {output_path.resolve()}")
     inspect_and_validate_scenario(output_path, ctx=ctx)

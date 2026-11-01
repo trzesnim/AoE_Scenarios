@@ -4,13 +4,19 @@ from __future__ import annotations
 
 from typing import Any
 
+from AoE2ScenarioParser.datasets.object_support import Civilization
 from AoE2ScenarioParser.datasets.players import PlayerId
 from AoE2ScenarioParser.datasets.terrains import TerrainId
+from AoE2ScenarioParser.datasets.trigger_lists import DiplomacyState
 from gondolin_config import (
     ARCHERY_RANGE_ID,
+    ARMY_TENT_A_ID,
+    ARMY_TENT_B_ID,
     BARRACKS_ID,
     BLACKSMITH_ID,
     CASTLE_ID,
+    CITY_GATE_NW_SE_ID,
+    CITY_GATE_SW_NE_ID,
     CYPRESS_TREE_ID,
     ENEMY_BALROG_BOSS_ID,
     ENEMY_FIRE_DRAKE_ID,
@@ -22,6 +28,7 @@ from gondolin_config import (
     ENEMY_ORC_INFANTRY_ID,
     FLAG_A_ID,
     FLAME_EFFECT_ID,
+    FORTIFIED_PALISADE_ID,
     FORTIFIED_WALL_ID,
     GUARD_TOWER_ID,
     HERO_DUILIN_ID,
@@ -40,6 +47,7 @@ from gondolin_config import (
     MAP_REVEALER_ID,
     MAP_SIZE,
     MARKET_ID,
+    MILL_ID,
     MONASTERY_ID,
     OAK_TREE_ID,
     OLIVE_TREE_ID,
@@ -80,6 +88,8 @@ class SafeMapGrid:
     def __init__(self, size: int = MAP_SIZE) -> None:
         self.size: int = size
         self.occupied_tiles: set[tuple[int, int]] = set()
+        self.gate_tiles: set[tuple[int, int]] = set()
+        self.placed_footprints: list[dict[str, Any]] = []
         self.road_corridors: set[tuple[int, int]] = set()
         self.no_tree_zones: set[tuple[int, int]] = set()
         self.failed_placements: list[dict[str, Any]] = []
@@ -277,27 +287,100 @@ class SafeMapGrid:
                 raise ValueError(msg)
             return None
 
-        self.mark_occupied_box(xmin, ymin, xmax, ymax, clear_trees_around=clear_trees_around)
+        if not allow_overlap:
+            self.mark_occupied_box(xmin, ymin, xmax, ymax, clear_trees_around=clear_trees_around)
         ux = (xmin + xmax + 1) / 2.0
         uy = (ymin + ymax + 1) / 2.0
-        return um.add_unit(player=player, unit_const=unit_id, x=ux, y=uy)
+        obj = um.add_unit(player=player, unit_const=unit_id, x=ux, y=uy)
+        self.placed_footprints.append(
+            {
+                "ref_id": int(getattr(obj, "reference_id", -1)),
+                "player": player,
+                "unit_id": unit_id,
+                "x": x,
+                "y": y,
+                "footprint": footprint,
+                "xmin": xmin,
+                "ymin": ymin,
+                "xmax": xmax,
+                "ymax": ymax,
+                "allow_overlap": allow_overlap,
+                "is_gate": False,
+            }
+        )
+        return obj
+
+    def place_gate_safe(
+        self,
+        um: Any,
+        player: PlayerId,
+        gate_id: int,
+        cx: int,
+        cy: int,
+        along_x: bool,
+        strict: bool = True,
+    ) -> Any:
+        """Place a 4-tile stone city gate (64 along X or 88 along Y) and mark its tiles as passable gate_tiles."""
+        if along_x:
+            xmin, xmax, ymin, ymax = cx - 2, cx + 1, cy, cy
+            ux, uy = float(cx), cy + 0.5
+        else:
+            xmin, xmax, ymin, ymax = cx, cx, cy - 2, cy + 1
+            ux, uy = cx + 0.5, float(cy)
+
+        tiles = [(tx, ty) for ty in range(ymin, ymax + 1) for tx in range(xmin, xmax + 1)]
+        if any(not self.in_bounds(tx, ty) or (tx, ty) in self.occupied_tiles for tx, ty in tiles):
+            failure = {
+                "player": player,
+                "unit_id": gate_id,
+                "x": cx,
+                "y": cy,
+                "footprint": 4,
+                "respect_roads": False,
+            }
+            self.failed_placements.append(failure)
+            if strict:
+                msg = f"[KOLIZJA BRAMY] Nie mozna postawic gate_id={gate_id} w ({cx}, {cy})!"
+                raise ValueError(msg)
+            return None
+
+        self.mark_occupied_box(xmin, ymin, xmax, ymax, clear_trees_around=True)
+        self.gate_tiles.update(tiles)
+        obj = um.add_unit(player=player, unit_const=gate_id, x=ux, y=uy)
+        self.placed_footprints.append(
+            {
+                "ref_id": int(getattr(obj, "reference_id", -1)),
+                "player": player,
+                "unit_id": gate_id,
+                "x": cx,
+                "y": cy,
+                "footprint": 4,
+                "xmin": xmin,
+                "ymin": ymin,
+                "xmax": xmax,
+                "ymax": ymax,
+                "allow_overlap": False,
+                "is_gate": True,
+            }
+        )
+        return obj
 
 
 def _configure_players_and_diplomacy(pm: Any) -> None:
-    """Configure P1-P4 (unified Western European Noldor architecture) and P5-P8 (Morgoth AI) with official diplomacy."""
+    """Configure P1-P4 (Noldor) and P5-P8 (Morgoth) with locked Immobile AI and official diplomacy."""
     pm.active_players = 8
 
-    # Official Genie Civilization IDs:
-    # P1-P4 share West European gothic stone architecture (Britons=1, Franks=2, Burgundians=33) for visual cohesion!
-    civ_map: dict[int, tuple[int, int]] = {
-        1: (1, 1),   # Britons / West European stone architecture
-        2: (1, 1),   # Britons / West European stone architecture
-        3: (2, 1),   # Franks / West European stone architecture
-        4: (33, 1),  # Burgundians / West European stone architecture
-        5: (3, 2),   # Goths (Angband Orc Horde)
-        6: (35, 3),  # Bohemians (Iron Dragons)
-        7: (8, 4),   # Persians / Eastern (Balrogs)
-        8: (4, 2),   # Teutons (Maeglin's Traitors)
+    # Official Civilization & Architecture datasets:
+    # P1-P4 share West European gothic stone architecture (Civilization.BRITONS) for visual cohesion.
+    civ_map: dict[int, tuple[Civilization, Civilization]] = {
+        1: (Civilization.BRITONS, Civilization.BRITONS),
+        2: (Civilization.BRITONS, Civilization.BRITONS),
+        3: (Civilization.FRANKS, Civilization.BRITONS),
+        4: (Civilization.BURGUNDIANS, Civilization.BRITONS),
+        5: (Civilization.GOTHS, Civilization.GOTHS),
+        6: (Civilization.BOHEMIANS, Civilization.BOHEMIANS),
+        7: (Civilization.PERSIANS, Civilization.PERSIANS),
+        8: (Civilization.TEUTONS, Civilization.TEUTONS),
     }
 
     noldor_team = [PlayerId.ONE, PlayerId.TWO, PlayerId.THREE, PlayerId.FOUR]
@@ -314,11 +397,21 @@ def _configure_players_and_diplomacy(pm: Any) -> None:
         if p_obj is None:
             continue
         is_human = idx <= 4
-        civ_id, arch_id = civ_map.get(idx, (1, 1))
+        civ_enum, arch_enum = civ_map.get(idx, (Civilization.BRITONS, Civilization.BRITONS))
+
+        # Disable PromiDE (Standard AI) on all 8 slots (P5-P8 + any AI-occupied P2-P4 slot in solo/partial coop)
+        # to prevent AppHangB1 (Sig[3]=185d) pathfinder/tactical deadlocks across sealed ROCK_CLIFF_ID sectors.
+        set_immobile_fn = getattr(p_obj, "set_immobile_ai", None)
+        if callable(set_immobile_fn):
+            set_immobile_fn()
+
         for attr_name, val in [
             ("human", is_human),
-            ("civilization", civ_id),
-            ("architecture_set", arch_id),
+            ("civilization", civ_enum),
+            ("architecture_set", arch_enum),
+            ("lock_civ", True),
+            ("lock_personality", True),
+            ("allied_victory", True),
             ("food", 0),
             ("wood", 0),
             ("stone", 0),
@@ -333,22 +426,23 @@ def _configure_players_and_diplomacy(pm: Any) -> None:
                 if prop is not None and prop.fset is not None:
                     setattr(p_obj, attr_name, val)
 
-        # Official per-player diplomacy method (0=Ally, 3=Enemy) or 0-indexed diplomacy array
+        # Official per-player diplomacy method or 0-indexed diplomacy array
         set_dip_fn = getattr(p_obj, "set_player_diplomacy", None)
         for other_idx in range(1, 9):
             if other_idx == idx:
                 continue
             same_team = (idx <= 4 and other_idx <= 4) or (idx >= 5 and other_idx >= 5)
-            state_val = 0 if same_team else 3
+            dip_enum = DiplomacyState.ALLY if same_team else DiplomacyState.ENEMY
             if callable(set_dip_fn):
-                set_dip_fn(PlayerId(other_idx), state_val)
+                set_dip_fn(PlayerId(other_idx), dip_enum)
             else:
                 dip = getattr(p_obj, "diplomacy", None)
                 if isinstance(dip, list):
+                    raw_val = int(dip_enum)
                     if len(dip) == 8:
-                        dip[other_idx - 1] = state_val
+                        dip[other_idx - 1] = raw_val
                     elif len(dip) >= 9:
-                        dip[other_idx] = state_val
+                        dip[other_idx] = raw_val
 
 
 def _sculpt_world_terrain(grid: SafeMapGrid) -> None:
@@ -357,29 +451,49 @@ def _sculpt_world_terrain(grid: SafeMapGrid) -> None:
     grid.paint_box(0, 0, MAP_SIZE - 1, MAP_SIZE - 1, TerrainId.DIRT_3, elev=6, protect_trees=False)
     grid.paint_box(174, 0, MAP_SIZE - 1, MAP_SIZE - 1, TerrainId.FOREST_PINE, elev=6, protect_trees=False)
 
-    # 2. Open, green Hidden Valley of Tumladen (X=10..178, Y=10..168, elev=2..3)
+    # 2. Open, green Hidden Valley of Tumladen (X=10..178, Y=10..168, elev=2..3) with organic contours
     grid.paint_box(10, 10, 178, 168, TerrainId.GRASS_1, elev=2, protect_trees=True)
     grid.paint_box(96, 66, 175, 155, TerrainId.GRASS_2, elev=3, protect_trees=True)
+    for gcx, gcy, gr in [(118, 76, 14), (144, 82, 16), (164, 78, 12), (132, 42, 10), (158, 44, 10)]:
+        grid.paint_circle(gcx, gcy, gr, TerrainId.GRASS_2, elev=2, protect_trees=True)
+    # Alpine highland ridges & rocky crags on NW Echoriath so mountains look natural on minimap
+    for mcx, mcy, mr in [(42, 192, 16), (86, 204, 18), (134, 196, 16), (64, 178, 12), (118, 220, 14)]:
+        grid.paint_circle(mcx, mcy, mr, TerrainId.DIRT_1, elev=7, protect_trees=False)
     # Forested ridge separating Lower Route (Dry Riverbed Y=34..46) from Upper Route (Tumladen Plains Y=60..96)
-    grid.paint_box(104, 48, 176, 57, TerrainId.FOREST_PINE, elev=5, protect_trees=False)
-    # Natural pine wooded ridges along the northern and southern edges of Tumladen
-    grid.paint_box(106, 134, 172, 154, TerrainId.FOREST_PINE, elev=4, protect_trees=False)
-    grid.paint_box(106, 16, 174, 28, TerrainId.FOREST_PINE, elev=4, protect_trees=False)
+    grid.paint_box(106, 49, 174, 56, TerrainId.FOREST_PINE, elev=5, protect_trees=False)
+    for fcx in (112, 126, 140, 154, 168):
+        grid.paint_circle(fcx, 53, 5, TerrainId.FOREST_PINE, elev=5, protect_trees=False)
+    # Natural pine wooded ridges with organic circular lobes along northern and southern Tumladen
+    grid.paint_box(108, 136, 170, 152, TerrainId.FOREST_PINE, elev=4, protect_trees=False)
+    for fcx, fcy, fr in [(114, 138, 9), (132, 136, 10), (150, 139, 9), (166, 137, 8)]:
+        grid.paint_circle(fcx, fcy, fr, TerrainId.FOREST_PINE, elev=4, protect_trees=False)
+    grid.paint_box(108, 17, 172, 27, TerrainId.FOREST_PINE, elev=4, protect_trees=False)
+    for fcx, fcy, fr in [(116, 26, 7), (136, 25, 8), (156, 26, 7), (168, 24, 6)]:
+        grid.paint_circle(fcx, fcy, fr, TerrainId.FOREST_PINE, elev=4, protect_trees=False)
 
     # 3. Gondolin City Terraces & Amon Gwareth (X=16..104, Y=16..114)
     grid.paint_box(16, 16, 104, 114, TerrainId.GRASS_2, elev=2, protect_trees=True)
+    # Stone district plazas across the Seven Houses so Gondolin reads as a dense stone metropolis
+    for px1, py1, px2, py2 in [
+        (18, 46, 44, 88),
+        (42, 18, 80, 46),
+        (78, 36, 102, 92),
+        (74, 88, 100, 108),
+        (18, 86, 46, 108),
+        (84, 18, 102, 34),
+    ]:
+        grid.paint_box(px1, py1, px2, py2, TerrainId.ROAD, elev=3, protect_trees=True)
     # Northern Moat (Shallows = 4, initially blocked by rocks until P2 opens the Aqueduct)
     grid.paint_box(22, 112, 98, 116, TerrainId.SHALLOWS, elev=1, protect_trees=True)
 
-    # Middle City Terrace: clean white/grey stone paving & green courtyards (NO global ROAD_BROKEN!)
+    # Middle City Terrace: white/grey stone paving & royal gardens
     grid.paint_box(28, 28, 92, 96, TerrainId.ROAD, elev=4, protect_trees=True)
-    grid.paint_box(34, 34, 52, 46, TerrainId.GRASS_2, elev=4, protect_trees=True)
-    grid.paint_box(68, 34, 86, 46, TerrainId.GRASS_2, elev=4, protect_trees=True)
+    for gcx, gcy, gr in [(43, 40, 7), (77, 40, 7), (43, 84, 5), (77, 84, 5)]:
+        grid.paint_circle(gcx, gcy, gr, TerrainId.GRASS_2, elev=4, protect_trees=True)
 
-    # Localized Siege Damage (ROAD_BROKEN only at the Northern & Eastern Breaches)
-    grid.paint_box(52, 94, 70, 112, TerrainId.ROAD_BROKEN, elev=3, protect_trees=True)
-    grid.paint_box(78, 102, 88, 112, TerrainId.ROAD_BROKEN, elev=3, protect_trees=True)
-    grid.paint_box(96, 56, 105, 70, TerrainId.ROAD_BROKEN, elev=3, protect_trees=True)
+    # Organic Siege Damage (overlapping circles at the Northern & Eastern Breaches instead of sharp boxes)
+    for bcx, bcy, br in [(61, 105, 9), (56, 108, 6), (66, 108, 6), (83, 107, 6), (101, 63, 7)]:
+        grid.paint_circle(bcx, bcy, br, TerrainId.ROAD_BROKEN, elev=3, protect_trees=True)
 
     # Amon Gwareth - Royal Hill at the heart of Gondolin (X=46..76, Y=48..78, elev=6..7)
     grid.paint_box(46, 48, 76, 78, TerrainId.ROAD, elev=6, protect_trees=True)
@@ -393,10 +507,10 @@ def _sculpt_world_terrain(grid: SafeMapGrid) -> None:
     grid.paint_corridor(76, 64, 65, 62, 2, TerrainId.SHALLOWS, elev=5, protect_trees=True, is_road=True)
 
     # Grand Avenues of Gondolin (marked as road_corridors so city blocks never obstruct movement)
-    grid.paint_corridor(61, 118, 61, 76, 4, TerrainId.ROAD, elev=3, protect_trees=True, is_road=True)
+    grid.paint_corridor(61, 130, 61, 79, 4, TerrainId.ROAD, elev=3, protect_trees=True, is_road=True)
     grid.paint_corridor(61, 16, 61, 48, 4, TerrainId.ROAD, elev=3, protect_trees=True, is_road=True)
     grid.paint_corridor(16, 63, 46, 63, 3, TerrainId.ROAD, elev=3, protect_trees=True, is_road=True)
-    grid.paint_corridor(104, 63, 76, 63, 4, TerrainId.ROAD, elev=3, protect_trees=True, is_road=True)
+    grid.paint_corridor(120, 63, 76, 63, 4, TerrainId.ROAD, elev=3, protect_trees=True, is_road=True)
     grid.paint_corridor(24, 26, 61, 26, 3, TerrainId.ROAD, elev=2, protect_trees=True, is_road=True)
     grid.paint_corridor(26, 26, 26, 63, 3, TerrainId.ROAD, elev=2, protect_trees=True, is_road=True)
     grid.paint_corridor(61, 26, 90, 26, 3, TerrainId.ROAD, elev=2, protect_trees=True, is_road=True)
@@ -407,7 +521,7 @@ def _sculpt_world_terrain(grid: SafeMapGrid) -> None:
 
     # 4. Phase II Dual Routes across Tumladen:
     # Route A (Lower): Secret Way of Idril (Underground Tunnel & Dry Riverbed, Y=36..46, X=74..185)
-    grid.paint_corridor(72, 52, 106, 52, 3, TerrainId.ROAD_FUNGUS, elev=1, protect_trees=True, is_road=True)
+    grid.paint_corridor(72, 52, 106, 52, 2, TerrainId.ROAD_FUNGUS, elev=1, protect_trees=True, is_road=True)
     grid.paint_corridor(106, 52, 112, 38, 3, TerrainId.ROAD_FUNGUS, elev=1, protect_trees=True, is_road=True)
     grid.paint_corridor(112, 38, 175, 42, 4, TerrainId.ROAD_BROKEN, elev=1, protect_trees=True, is_road=True)
     grid.paint_corridor(175, 42, 185, 85, 4, TerrainId.DIRT_1, elev=2, protect_trees=True, is_road=True)
@@ -433,8 +547,12 @@ def _sculpt_world_terrain(grid: SafeMapGrid) -> None:
     grid.paint_corridor(190, 218, 226, 224, 4, TerrainId.ROAD, elev=6, protect_trees=True, is_road=True)
     grid.paint_box(193, 194, 203, 202, TerrainId.ROAD, elev=7, protect_trees=True, is_road=True)
 
-    # 6. Balance Sanctuary & Phase Marker strip in NW corner
-    grid.paint_box(1, 220, 20, 236, TerrainId.ROAD, elev=4, protect_trees=True, is_road=True)
+    # 6. Isolated NW State/Phase Marker Strip (hidden in FoW) & Compact Zero-FoW Balance Sanctuary (8..16 x 222..232)
+    grid.paint_box(1, 164, 4, 212, TerrainId.ROAD, elev=4, protect_trees=True, is_road=False)
+    grid.paint_box(8, 222, 16, 232, TerrainId.DIRT_3, elev=4, protect_trees=True, is_road=False)
+    grid.paint_box(9, 223, 15, 225, TerrainId.ROAD_BROKEN, elev=4, protect_trees=True, is_road=True)
+    grid.paint_box(9, 226, 15, 228, TerrainId.ROAD, elev=4, protect_trees=True, is_road=True)
+    grid.paint_box(9, 229, 15, 231, TerrainId.GRASS_2, elev=4, protect_trees=True, is_road=True)
 
     grid.smooth_elevations_lipschitz()
 
@@ -481,7 +599,9 @@ def _build_gondolin_walls_and_districts(
         place_bldg(PlayerId.ONE, GUARD_TOWER_ID, tx, 16, footprint=2, respect_roads=False)
     for tx in (16, 26, 36, 46, 74, 90, 98, 103):
         place_bldg(PlayerId.THREE, GUARD_TOWER_ID, tx, 110, footprint=2, respect_roads=False)
-    for ty in (26, 36, 48, 74, 86, 98):
+    for ty in (26, 36, 48):
+        place_bldg(PlayerId.GAIA, GUARD_TOWER_ID, 16, ty, footprint=2, respect_roads=False)
+    for ty in (74, 86, 98):
         place_bldg(PlayerId.FOUR, GUARD_TOWER_ID, 16, ty, footprint=2, respect_roads=False)
     for ty in (26, 36, 46, 78, 90, 100):
         place_bldg(PlayerId.TWO, GUARD_TOWER_ID, 103, ty, footprint=2, respect_roads=False)
@@ -489,6 +609,21 @@ def _build_gondolin_walls_and_districts(
     # Inner Citadel Corner Keeps (2x2) on Amon Gwareth
     for kx, ky in [(46, 48), (75, 48), (46, 77), (75, 77)]:
         place_bldg(PlayerId.ONE, KEEP_ID, kx, ky, footprint=2, respect_roads=False)
+
+    # Physical Stone City Gates (64 = SW->NE along X, 88 = NW->SE along Y) in Gondolin's intact 4-tile openings
+    city_gates: list[tuple[PlayerId, int, int, int, bool]] = [
+        (PlayerId.ONE, CITY_GATE_SW_NE_ID, 61, 16, True),    # South Grand Gate
+        (PlayerId.FOUR, CITY_GATE_NW_SE_ID, 16, 63, False),  # West Forge Gate
+        (PlayerId.ONE, CITY_GATE_SW_NE_ID, 61, 48, True),    # Amon Gwareth South Citadel Gate
+        (PlayerId.ONE, CITY_GATE_SW_NE_ID, 61, 78, True),    # Amon Gwareth North Citadel Gate
+        (PlayerId.ONE, CITY_GATE_NW_SE_ID, 46, 63, False),   # Amon Gwareth West Citadel Gate
+        (PlayerId.TWO, CITY_GATE_NW_SE_ID, 76, 63, False),   # Amon Gwareth East Citadel Gate
+    ]
+    for gp, gid, gcx, gcy, along_x in city_gates:
+        grid.place_gate_safe(um, gp, gid, gcx, gcy, along_x=along_x, strict=True)
+        if gp in bldg_counter:
+            bldg_counter[gp] += 1
+        placed_buildings += 1
 
     # =========================================================================
     # B. CONTINUOUS STONE WALL SEGMENTS FILLING GAPS BETWEEN TOWERS (1x1)
@@ -529,6 +664,8 @@ def _build_gondolin_walls_and_districts(
         (PlayerId.ONE, HOUSE_ID, 20, 82, 2), (PlayerId.ONE, HOUSE_ID, 20, 86, 2),
         (PlayerId.ONE, HOUSE_ID, 38, 46, 2), (PlayerId.ONE, HOUSE_ID, 42, 46, 2),
         (PlayerId.ONE, HOUSE_ID, 38, 78, 2), (PlayerId.ONE, HOUSE_ID, 42, 78, 2),
+        (PlayerId.ONE, HOUSE_ID, 30, 46, 2), (PlayerId.ONE, HOUSE_ID, 39, 58, 2),
+        (PlayerId.ONE, HOUSE_ID, 39, 68, 2), (PlayerId.ONE, PAVILION_ID, 30, 54, 2),
         # 2. South Quarter: House of the Wing (Tuor's Royal Guard & Noble Mansions)
         (PlayerId.ONE, BARRACKS_ID, 48, 34, 3), (PlayerId.ONE, BARRACKS_ID, 72, 34, 3),
         (PlayerId.ONE, ARCHERY_RANGE_ID, 48, 41, 3), (PlayerId.ONE, ARCHERY_RANGE_ID, 72, 41, 3),
@@ -536,36 +673,42 @@ def _build_gondolin_walls_and_districts(
         (PlayerId.ONE, PAVILION_ID, 53, 35, 2), (PlayerId.ONE, PAVILION_ID, 67, 35, 2),
         (PlayerId.ONE, HOUSE_ID, 44, 20, 2), (PlayerId.ONE, HOUSE_ID, 47, 20, 2),
         (PlayerId.ONE, HOUSE_ID, 75, 20, 2), (PlayerId.ONE, HOUSE_ID, 78, 20, 2),
-        (PlayerId.ONE, HOUSE_ID, 44, 42, 2), (PlayerId.ONE, HOUSE_ID, 48, 46, 2),
-        (PlayerId.ONE, HOUSE_ID, 76, 44, 2), (PlayerId.ONE, HOUSE_ID, 78, 38, 2),
+        (PlayerId.ONE, HOUSE_ID, 44, 42, 2), (PlayerId.ONE, HOUSE_ID, 48, 45, 2),
+        (PlayerId.ONE, HOUSE_ID, 75, 45, 2), (PlayerId.ONE, HOUSE_ID, 78, 38, 2),
+        (PlayerId.ONE, HOUSE_ID, 53, 41, 2), (PlayerId.ONE, HOUSE_ID, 67, 41, 2),
         # 3. SW Quarter: House of the Tree & Wardens of the Secret Way (Idril & Galdor)
         (PlayerId.FOUR, BARRACKS_ID, 35, 19, 3), (PlayerId.FOUR, ARCHERY_RANGE_ID, 38, 35, 3),
-        (PlayerId.FOUR, MONASTERY_ID, 20, 33, 3), (PlayerId.FOUR, PAVILION_ID, 20, 19, 2),
+        (PlayerId.FOUR, MONASTERY_ID, 20, 33, 3), (PlayerId.FOUR, PAVILION_ID, 28, 19, 2),
         (PlayerId.FOUR, HOUSE_ID, 39, 19, 2), (PlayerId.FOUR, HOUSE_ID, 44, 34, 2),
-        (PlayerId.FOUR, HOUSE_ID, 44, 38, 2), (PlayerId.FOUR, HOUSE_ID, 30, 39, 2),
+        (PlayerId.FOUR, HOUSE_ID, 44, 38, 2), (PlayerId.FOUR, HOUSE_ID, 31, 39, 2),
+        (PlayerId.FOUR, HOUSE_ID, 31, 19, 2),
         # 4. East Quarter: House of the Fountain & Heavenly Arch (Ecthelion & Egalmoth)
         (PlayerId.TWO, ARCHERY_RANGE_ID, 99, 84, 3), (PlayerId.TWO, BARRACKS_ID, 95, 84, 3),
-        (PlayerId.TWO, MONASTERY_ID, 85, 45, 3), (PlayerId.TWO, MARKET_ID, 97, 44, 4),
+        (PlayerId.TWO, MONASTERY_ID, 97, 37, 3), (PlayerId.TWO, MARKET_ID, 98, 44, 4),
         (PlayerId.TWO, PAVILION_ID, 86, 80, 2), (PlayerId.TWO, HOUSE_ID, 79, 40, 2),
-        (PlayerId.TWO, HOUSE_ID, 82, 40, 2), (PlayerId.TWO, HOUSE_ID, 98, 36, 2),
+        (PlayerId.TWO, HOUSE_ID, 82, 40, 2), (PlayerId.TWO, HOUSE_ID, 100, 36, 2),
         (PlayerId.TWO, HOUSE_ID, 94, 89, 2), (PlayerId.TWO, HOUSE_ID, 98, 89, 2),
+        (PlayerId.TWO, HOUSE_ID, 95, 79, 2), (PlayerId.TWO, HOUSE_ID, 99, 79, 2),
         # 5. SE Quarter: Court of Salgant & House of the Harp
-        (PlayerId.THREE, STABLE_ID, 81, 20, 3), (PlayerId.THREE, STABLE_ID, 98, 20, 3),
+        (PlayerId.THREE, STABLE_ID, 81, 20, 3), (PlayerId.THREE, STABLE_ID, 100, 20, 3),
         (PlayerId.THREE, MONASTERY_ID, 28, 88, 3), (PlayerId.THREE, PAVILION_ID, 98, 29, 2),
-        (PlayerId.THREE, HOUSE_ID, 86, 19, 2), (PlayerId.THREE, HOUSE_ID, 94, 19, 2),
-        (PlayerId.THREE, HOUSE_ID, 98, 26, 2), (PlayerId.THREE, HOUSE_ID, 95, 38, 2),
+        (PlayerId.THREE, HOUSE_ID, 86, 19, 2), (PlayerId.THREE, HOUSE_ID, 89, 19, 2),
+        (PlayerId.THREE, HOUSE_ID, 99, 26, 2), (PlayerId.THREE, HOUSE_ID, 95, 32, 2),
+        (PlayerId.THREE, HOUSE_ID, 89, 22, 2),
         # 6. NE Quarter: House of the Golden Flower & Swallow (Glorfindel & Duilin)
-        (PlayerId.THREE, STABLE_ID, 88, 76, 3), (PlayerId.THREE, ARCHERY_RANGE_ID, 88, 84, 3),
+        (PlayerId.THREE, STABLE_ID, 86, 101, 3), (PlayerId.THREE, ARCHERY_RANGE_ID, 88, 85, 3),
         (PlayerId.THREE, UNIVERSITY_ID, 96, 94, 4), (PlayerId.THREE, PAVILION_ID, 77, 86, 2),
         (PlayerId.THREE, HOUSE_ID, 76, 102, 2), (PlayerId.THREE, HOUSE_ID, 77, 90, 2),
         (PlayerId.THREE, HOUSE_ID, 88, 90, 2), (PlayerId.THREE, HOUSE_ID, 96, 102, 2),
-        (PlayerId.THREE, HOUSE_ID, 96, 106, 2), (PlayerId.THREE, HOUSE_ID, 88, 105, 2),
+        (PlayerId.THREE, HOUSE_ID, 96, 106, 2), (PlayerId.THREE, HOUSE_ID, 90, 105, 2),
+        (PlayerId.THREE, HOUSE_ID, 80, 102, 2), (PlayerId.THREE, PAVILION_ID, 80, 106, 2),
         # 7. NW Quarter: House of the Pillar & Tower of Snow (Penlod's Quarter)
         (PlayerId.TWO, UNIVERSITY_ID, 42, 84, 4), (PlayerId.TWO, MARKET_ID, 23, 89, 4),
         (PlayerId.TWO, BLACKSMITH_ID, 44, 104, 3), (PlayerId.TWO, BARRACKS_ID, 22, 100, 3),
         (PlayerId.TWO, PAVILION_ID, 28, 82, 2), (PlayerId.TWO, HOUSE_ID, 20, 94, 2),
         (PlayerId.TWO, HOUSE_ID, 20, 105, 2), (PlayerId.TWO, HOUSE_ID, 28, 105, 2),
         (PlayerId.TWO, HOUSE_ID, 36, 105, 2), (PlayerId.TWO, HOUSE_ID, 40, 90, 2),
+        (PlayerId.TWO, HOUSE_ID, 28, 100, 2), (PlayerId.TWO, HOUSE_ID, 39, 100, 2),
     ]
     for p_id, u_id, bx, by, fp in district_buildings:
         place_bldg(p_id, u_id, bx, by, footprint=fp, respect_roads=True)
@@ -603,13 +746,18 @@ def _populate_forests_and_borders(grid: SafeMapGrid, um: Any) -> None:
                 um.add_unit(player=PlayerId.GAIA, unit_const=tree_id, x=float(tx) + 0.5, y=float(ty) + 0.5)
                 grid.occupied_tiles.add((tx, ty))
 
-    # Surround Balance Sanctuary (X=4..20, Y=220..236) with indestructible rock cliffs
-    for tx in range(4, 21):
-        for ty in (220, 236):
+    # Surround compact Balance Sanctuary (X=8..16, Y=222..232) with indestructible rock cliffs & visual cues
+    for tx in range(8, 17):
+        for ty in (222, 232):
             grid.place_unit_safe(um, PlayerId.GAIA, ROCK_CLIFF_ID, tx, ty, clear_trees_around=False, strict=False)
-    for ty in range(221, 236):
-        for tx in (4, 20):
+    for ty in range(223, 232):
+        for tx in (8, 16):
             grid.place_unit_safe(um, PlayerId.GAIA, ROCK_CLIFF_ID, tx, ty, clear_trees_around=False, strict=False)
+    # UP = Fire/Torches (Harder +), DOWN = Banners (Easier -)
+    grid.place_unit_safe(um, PlayerId.GAIA, TORCH_ID, 9, 223, clear_trees_around=False, strict=True)
+    grid.place_unit_safe(um, PlayerId.GAIA, TORCH_ID, 15, 223, clear_trees_around=False, strict=True)
+    grid.place_unit_safe(um, PlayerId.GAIA, FLAG_A_ID, 9, 231, clear_trees_around=False, strict=True)
+    grid.place_unit_safe(um, PlayerId.GAIA, FLAG_A_ID, 15, 231, clear_trees_around=False, strict=True)
 
 
 def build_map_and_entities(scenario: Any) -> dict[str, Any]:

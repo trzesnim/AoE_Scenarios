@@ -20,6 +20,7 @@ importlib.reload(gondolin_config)
 importlib.reload(gondolin_mechanics)
 importlib.reload(gondolin_quests)
 
+from AoE2ScenarioParser.datasets.trigger_lists import Operation
 from gondolin_config import (
     PlayerId,
     HERO_ECTHELION_ID,
@@ -185,24 +186,37 @@ class EffAPI:
     def kill_object(
         self,
         source_player: PlayerId = PlayerId.ONE,
+        object_type: int = -1,
         selected_object_ids: list[int] | None = None,
         area_x1: int = 0,
         area_y1: int = 0,
         area_x2: int = 0,
         area_y2: int = 0,
     ) -> None:
-        self._t.effects.append(EffRec("kill_object", source_player=source_player))
+        self._t.effects.append(EffRec("kill_object", source_player=source_player, object_type=object_type))
 
     def damage_object(
         self,
         source_player: PlayerId = PlayerId.ONE,
+        object_type: int = -1,
         area_x1: int = 0,
         area_y1: int = 0,
         area_x2: int = 0,
         area_y2: int = 0,
         quantity: int = 0,
     ) -> None:
-        self._t.effects.append(EffRec("damage_object", source_player=source_player, quantity=quantity))
+        self._t.effects.append(EffRec("damage_object", source_player=source_player, object_type=object_type, quantity=quantity))
+
+    def change_diplomacy(
+        self,
+        diplomacy: int = 0,
+        source_player: PlayerId = PlayerId.ONE,
+        target_player: PlayerId = PlayerId.TWO,
+        mutual_diplomacy: bool | None = None,
+    ) -> None:
+        self._t.effects.append(
+            EffRec("change_diplomacy", diplomacy=diplomacy, source_player=source_player, target_player=target_player)
+        )
 
     def heal_object(
         self,
@@ -329,7 +343,12 @@ class TriggerSimulator:
         self.time: float = 0.0
 
     def _is_military(self, unit_id: int) -> bool:
-        return unit_id in MILITARY_UNIT_IDS or unit_id >= 1100 or unit_id in (4, 24, 89, 473, 532, 542, 548, 640, 756, 878, 188)
+        enemy_mil = (
+            set(gondolin_config.ENEMY_MELEE_UNITS)
+            | set(gondolin_config.ENEMY_RANGED_UNITS)
+            | {gondolin_config.ENEMY_IRON_DRAGON_RAM_ID}
+        )
+        return unit_id in MILITARY_UNIT_IDS or unit_id in enemy_mil or unit_id >= 1100
 
     def _eval_cond(self, trig_id: int, cond: CondRec) -> bool:
         kw = cond.kwargs
@@ -436,9 +455,9 @@ class TriggerSimulator:
                         ]
                     elif eff.effect_type == "modify_resource":
                         if ekw["source_player"] == PlayerId.ONE and ekw["tribute_list"] == 3:
-                            if int(ekw["operation"]) == 1:
+                            if int(ekw["operation"]) == int(Operation.ADD):
                                 self.glory_gold += ekw["quantity"]
-                            elif int(ekw["operation"]) == 3:
+                            elif int(ekw["operation"]) == int(Operation.SUBTRACT):
                                 self.glory_gold -= ekw["quantity"]
                     elif eff.effect_type == "declare_victory":
                         if not ekw.get("enabled", True):

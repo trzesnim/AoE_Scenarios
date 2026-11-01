@@ -7,7 +7,7 @@ import inspect
 from typing import Any
 
 from AoE2ScenarioParser.datasets.players import PlayerId
-from AoE2ScenarioParser.datasets.trigger_lists import Operation
+from AoE2ScenarioParser.datasets.trigger_lists import DiplomacyState, Operation
 from gondolin_config import (
     AI_PLAYERS,
     ARMOR_CLASS_MELEE,
@@ -23,21 +23,25 @@ from gondolin_config import (
     ATTR_SEARCH_RADIUS,
     BALANCE,
     ENEMY_BALROG_BOSS_ID,
+    ENEMY_DIRE_WOLF_ID,
     ENEMY_FIRE_DRAKE_ID,
     ENEMY_GOTHMOG_ID,
+    ENEMY_HEAVY_SCORPION_ID,
     ENEMY_IRON_DRAGON_RAM_ID,
     ENEMY_MAEGLIN_ID,
     ENEMY_MELEE_UNITS,
     ENEMY_MOLE_PIKE_ID,
     ENEMY_MOLE_TRAITOR_ID,
+    ENEMY_ORC_ARCHER_ID,
     ENEMY_ORC_BRUTE_ID,
     ENEMY_ORC_CROSSBOW_ID,
     ENEMY_ORC_INFANTRY_ID,
     ENEMY_RANGED_UNITS,
+    ENEMY_WARG_RIDER_ID,
     FLARE_UNIT_ID,
-    HERO_DUILIN_ID,
     HERO_ECTHELION_ID,
     HERO_EGALMOTH_ID,
+    HERO_GLORFINDEL_ID,
     HERO_ROG_ID,
     HUMAN_PLAYERS,
     MAP_REVEALER_ID,
@@ -106,9 +110,10 @@ PLAYER_RANGED_RETINUE: list[int] = [
     UNIT_TREE_SLINGER_ID,
 ]
 
+# Ranged class-3 heroes (200 Robin Hood & 172 Tamerlane; 428 Hrolf the Ganger is melee class 4)
 HERO_RANGED_IDS: set[int] = {
     HERO_EGALMOTH_ID,
-    HERO_DUILIN_ID,
+    HERO_GLORFINDEL_ID,
 }
 
 
@@ -173,6 +178,46 @@ def add_chat_and_flare(
             )
 
 
+def inject_debug_chat_into_triggers(
+    tm: Any,
+    recipient: PlayerId = PlayerId.ONE,
+) -> int:
+    """Prepend a single Send Chat effect with trigger ID and name to index 0 of every trigger."""
+    injected = 0
+    for idx, trig in enumerate(tm.triggers):
+        trig_id = getattr(trig, "trigger_id", idx)
+        debug_msg = f"<AQUA>[DBG #{trig_id}] {trig.name}"
+
+        if trig.effects:
+            first_idx = (
+                trig.effect_order[0]
+                if hasattr(trig, "effect_order") and trig.effect_order
+                else 0
+            )
+            if 0 <= first_idx < len(trig.effects):
+                first_msg = getattr(trig.effects[first_idx], "message", "") or ""
+                if first_msg.startswith("<AQUA>[DBG #"):
+                    continue
+
+        old_order = (
+            list(trig.effect_order)
+            if hasattr(trig, "effect_order")
+            else list(range(len(trig.effects)))
+        )
+        safe_call(
+            trig.new_effect.send_chat,
+            source_player=recipient,
+            message=debug_msg,
+        )
+        chat_eff = trig.effects.pop(-1)
+        trig.effects.insert(0, chat_eff)
+        if hasattr(trig, "effect_order"):
+            _ = trig.effect_order
+            trig.effect_order = [0, *[eff_i + 1 for eff_i in old_order]]
+        injected += 1
+    return injected
+
+
 def spawn_progressive_revealer(
     trig: Any,
     x: int,
@@ -208,22 +253,11 @@ def add_enemy_combat_buff(
     trig: Any,
     hp_delta: int,
     atk_delta: int,
-    use_multiply_hp: bool = False,
-    hp_mult: float = 1.0,
 ) -> None:
-    """Safely scale enemy melee (class 4) and ranged (class 3) units without uint8 underflow."""
+    """Safely scale enemy melee (class 4) and ranged (class 3) units using integer ADD/SUBTRACT only."""
     for ai_p in AI_PLAYERS:
         for u_id in ENEMY_MELEE_UNITS + ENEMY_RANGED_UNITS:
-            if use_multiply_hp:
-                safe_call(
-                    trig.new_effect.modify_attribute,
-                    source_player=ai_p,
-                    object_list_unit_id=u_id,
-                    object_attributes=ATTR_HIT_POINTS,
-                    operation=Operation.MULTIPLY,
-                    quantity=hp_mult,
-                )
-            elif hp_delta > 0:
+            if hp_delta > 0:
                 safe_call(
                     trig.new_effect.modify_attribute,
                     source_player=ai_p,
@@ -231,6 +265,15 @@ def add_enemy_combat_buff(
                     object_attributes=ATTR_HIT_POINTS,
                     operation=Operation.ADD,
                     quantity=hp_delta,
+                )
+            elif hp_delta < 0:
+                safe_call(
+                    trig.new_effect.modify_attribute,
+                    source_player=ai_p,
+                    object_list_unit_id=u_id,
+                    object_attributes=ATTR_HIT_POINTS,
+                    operation=Operation.SUBTRACT,
+                    quantity=abs(hp_delta),
                 )
 
         if atk_delta > 0:
@@ -640,6 +683,22 @@ def _setup_t_init_and_unit_scaling(tm: Any, ctx: dict[str, Any]) -> None:
         TECH_CHEMISTRY,
     ]
 
+    # Enforce deterministic Noldor (P1-P4) vs Morgoth (P5-P8) diplomacy in-game regardless of lobby teams
+    all_active_players = HUMAN_PLAYERS + AI_PLAYERS
+    for src_p in all_active_players:
+        for dst_p in all_active_players:
+            if src_p == dst_p:
+                continue
+            same_side = (src_p in HUMAN_PLAYERS and dst_p in HUMAN_PLAYERS) or (
+                src_p in AI_PLAYERS and dst_p in AI_PLAYERS
+            )
+            safe_call(
+                t_init_techs.new_effect.change_diplomacy,
+                source_player=src_p,
+                target_player=dst_p,
+                diplomacy=DiplomacyState.ALLY if same_side else DiplomacyState.ENEMY,
+            )
+
     for p_id in HUMAN_PLAYERS:
         safe_call(
             t_init_techs.new_effect.research_technology,
@@ -930,6 +989,21 @@ def _setup_t_init_and_unit_scaling(tm: Any, ctx: dict[str, Any]) -> None:
                 armour_attack_class=ARMOR_CLASS_MELEE,
                 armour_attack_quantity=26,
             )
+        for aux_id, aux_hp in (
+            (ENEMY_ORC_ARCHER_ID, 75),
+            (ENEMY_ORC_CROSSBOW_ID, 95),
+            (ENEMY_DIRE_WOLF_ID, 110),
+            (ENEMY_WARG_RIDER_ID, 180),
+            (ENEMY_HEAVY_SCORPION_ID, 140),
+        ):
+            safe_call(
+                t_init_stats.new_effect.modify_attribute,
+                source_player=ai_p,
+                object_list_unit_id=aux_id,
+                object_attributes=ATTR_HIT_POINTS,
+                operation=Operation.SET,
+                quantity=aux_hp,
+            )
 
     for b_id, b_cfg in BALANCE["bosses"].items():
         atk_cls = (
@@ -1015,6 +1089,7 @@ def _setup_special_auras_and_hazards(tm: Any, ctx: dict[str, Any]) -> None:
     safe_call(
         t_fountain_weaken.new_effect.damage_object,
         source_player=PlayerId.SEVEN,
+        object_type=OBJECT_TYPE_MILITARY,
         area_x1=fx1,
         area_y1=fy1,
         area_x2=fx2,
@@ -1098,6 +1173,7 @@ def _setup_special_auras_and_hazards(tm: Any, ctx: dict[str, Any]) -> None:
         safe_call(
             t_north_fire.new_effect.damage_object,
             source_player=p_id,
+            object_type=OBJECT_TYPE_MILITARY,
             area_x1=nx1,
             area_y1=ny1,
             area_x2=nx2,
@@ -1184,16 +1260,25 @@ def _setup_iron_dragon_corridor_spawners(tm: Any, ctx: dict[str, Any]) -> None:
     )
 
     corridors = ctx["dragon_corridors"]
+    drop_trigger_ids: list[int] = []
     for ave_name, zones in corridors.items():
         for idx, (zx1, zy1, zx2, zy2) in enumerate(zones):
             cx = (zx1 + zx2) // 2
             cy = (zy1 + zy2) // 2
             t_drop = tm.add_trigger(
                 name=f"P6_Dragon_Drop_{ave_name}_Z{idx}",
-                enabled=True,
+                enabled=False,
                 looping=True,
             )
-            safe_call(t_drop.new_condition.timer, timer=32)
+            drop_trigger_ids.append(t_drop.trigger_id)
+            safe_call(
+                t_spawn_dragons.new_effect.activate_trigger,
+                trigger_id=t_drop.trigger_id,
+            )
+            safe_call(
+                t_drop.new_condition.timer,
+                timer=BALANCE["dragon_drop_interval_seconds"],
+            )
             # Filter strictly by ENEMY_IRON_DRAGON_RAM_ID so P6 buildings or minor units never trigger Orc drops!
             safe_call(
                 t_drop.new_condition.objects_in_area,
@@ -1204,6 +1289,24 @@ def _setup_iron_dragon_corridor_spawners(tm: Any, ctx: dict[str, Any]) -> None:
                 area_x2=zx2,
                 area_y2=zy2,
                 quantity=1,
+            )
+            # Global P5 military cap + local corridor anti-stacking check (wait until previous wave clears/advances)
+            safe_call(
+                t_drop.new_condition.own_fewer_objects,
+                source_player=PlayerId.FIVE,
+                object_type=OBJECT_TYPE_MILITARY,
+                quantity=BALANCE["dragon_drop_p5_pop_cap"],
+            )
+            safe_call(
+                t_drop.new_condition.objects_in_area,
+                source_player=PlayerId.FIVE,
+                object_type=OBJECT_TYPE_MILITARY,
+                area_x1=zx1,
+                area_y1=zy1,
+                area_x2=zx2,
+                area_y2=zy2,
+                quantity=BALANCE["dragon_drop_zone_congestion_max"],
+                inverted=1,
             )
             for i in range(5):
                 safe_call(
@@ -1240,6 +1343,7 @@ def _setup_iron_dragon_corridor_spawners(tm: Any, ctx: dict[str, Any]) -> None:
                 location_x=61,
                 location_y=63,
             )
+    ctx["dragon_drop_trigger_ids"] = drop_trigger_ids
 
 
 def setup_init_auras_and_mechanics(scenario: Any, ctx: dict[str, Any]) -> None:

@@ -155,12 +155,21 @@ def run_stage_b_tests() -> None:
     assert 3000 <= tree_count <= 9000, f"Tree count {tree_count} out of budget [3000..9000]"
 
     # Build static obstacle set (buildings, walls, trees, cliffs, excluding mobile units)
-    mobile_unit_ids = {
-        426, 1066, 168, 682, 172, 428, 1292, 636, 430, 434, 837,
-        1703, 693, 567, 1661, 359, 530, 1130, 882, 569, 469, 125,
-        1699, 185, 440, 128, 293, 752, 1124, 473, 4, 24, 89, 756,
-        548, 188, 542, 1737, 1713, 878, 532, 640, 303,
-    }
+    mobile_unit_ids = (
+        set(gondolin_config.PLAYER_ALL_COMBAT_UNITS)
+        | set(gondolin_config.ENEMY_MELEE_UNITS)
+        | set(gondolin_config.ENEMY_RANGED_UNITS)
+        | {
+            gondolin_config.SANCTUARY_KING_ID,
+            gondolin_config.MAP_REVEALER_ID,
+            gondolin_config.UNIT_HARP_HEALER_ID,
+            gondolin_config.UNIT_IDRIL_SAPPER_ID,
+            gondolin_config.UNIT_REFUGEE_CART_ID,
+            gondolin_config.UNIT_REFUGEE_CIV_ID,
+            gondolin_config.ENEMY_IRON_DRAGON_RAM_ID,
+            gondolin_config.FLAME_EFFECT_ID,
+        }
+    )
     blocked_0s: set[tuple[int, int]] = set()
     for u in placed_units:
         if u.unit_const not in mobile_unit_ids:
@@ -224,7 +233,7 @@ def run_stage_b_tests() -> None:
     unblock_rock_group(blocked_p3, "cirith_exit_rocks")
     assert bfs_reachable(blocked_p3, (198, 198), (224, 224)), "Cannot reach Vale of Sirion Victory Exit (224,224)!"
 
-    preview_path = Path("gondolin_map_preview.png")
+    preview_path = Path(__file__).resolve().parent / "gondolin_map_preview.png"
     render_cartographic_preview(ctx, placed_units, preview_path)
 
     print("=" * 78)
