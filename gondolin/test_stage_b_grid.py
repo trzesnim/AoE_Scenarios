@@ -171,8 +171,9 @@ def run_stage_b_tests() -> None:
         }
     )
     blocked_0s: set[tuple[int, int]] = set()
+    passable_gate_ids = {gondolin_config.CITY_GATE_SW_NE_ID, gondolin_config.CITY_GATE_NW_SE_ID}
     for u in placed_units:
-        if u.unit_const not in mobile_unit_ids:
+        if u.unit_const not in mobile_unit_ids and u.unit_const not in passable_gate_ids:
             # Find footprint if registered in quest_buildings or standard wall/tower
             fp = 1
             if u.unit_const in (234, 235, 598, 626, 70):
@@ -189,20 +190,23 @@ def run_stage_b_tests() -> None:
                     blocked_0s.add((tx, ty))
 
     # 3. Negative BFS Tests at 0:00 (Blockades MUST block passage before triggers remove them!)
+    # The siege perimeter now lies at X=121 / Y=134, so Tumladen entry goals sit just beyond it (X=130).
+    lower_goal, upper_goal = (130, 40), (130, 88)
     assert not bfs_reachable(blocked_0s, (61, 24), (28, 28)), "caragdur_blockade failed to block P1->P4 at 0:00!"
-    assert not bfs_reachable(blocked_0s, (61, 56), (110, 40)), "tumladen_exit_rocks failed to block Lower Route at 0:00!"
-    assert not bfs_reachable(blocked_0s, (61, 56), (110, 86)), "tumladen_exit_rocks failed to block Upper Route at 0:00!"
+    assert not bfs_reachable(blocked_0s, (61, 56), lower_goal), "tumladen_exit_rocks failed to block Lower Route at 0:00!"
+    assert not bfs_reachable(blocked_0s, (61, 56), upper_goal), "tumladen_exit_rocks failed to block Upper Route at 0:00!"
+    assert not bfs_reachable(blocked_0s, (61, 56), (61, 140)), "North siege perimeter (Y=134) leaks at 0:00!"
     assert not bfs_reachable(blocked_0s, (184, 84), (198, 198)), "orfalch_gates failed to block Cirith Thoronath at 0:00!"
     assert not bfs_reachable(blocked_0s, (198, 198), (224, 224)), "cirith_exit_rocks failed to block Sirion Exit at 0:00!"
 
     # 4. Positive BFS Tests at 0:00 (All open city avenues & enclaves reachable from Amon Gwareth!)
     for name, target in [
         ("South_Gate_P1", (61, 24)),
-        ("Fountain_Terrace_P2", (82, 58)),
-        ("North_Approach_P3", (68, 92)),
+        ("Fountain_Terrace_P2", ctx["starts"][PlayerId.TWO]),
+        ("North_Approach_P3", ctx["starts"][PlayerId.THREE]),
         ("Great_Forge_West", (28, 63)),
         ("Great_Market_East", (93, 62)),
-        ("Aqueduct_Control", (84, 70)),
+        ("Aqueduct_Control", (88, 74)),
         ("Snow_Watchtower", (74, 102)),
     ]:
         assert bfs_reachable(blocked_0s, (61, 61), target), f"Amon Gwareth (61,61) cannot reach {name} {target}!"
@@ -220,10 +224,10 @@ def run_stage_b_tests() -> None:
 
     blocked_p2 = set(blocked_p1_breach)
     unblock_rock_group(blocked_p2, "tumladen_exit_rocks")
-    assert bfs_reachable(blocked_p2, (61, 56), (110, 40)), "Cannot reach Lower Route (110,40) in Phase II!"
-    assert bfs_reachable(blocked_p2, (61, 56), (110, 86)), "Cannot reach Upper Route (110,86) in Phase II!"
-    assert bfs_reachable(blocked_p2, (110, 40), (184, 84)), "Lower Route cannot reach Orfalch Echor (184,84)!"
-    assert bfs_reachable(blocked_p2, (110, 86), (184, 84)), "Upper Route cannot reach Orfalch Echor (184,84)!"
+    assert bfs_reachable(blocked_p2, (61, 56), lower_goal), "Cannot reach Lower Route (130,40) in Phase II!"
+    assert bfs_reachable(blocked_p2, (61, 56), upper_goal), "Cannot reach Upper Route (130,88) in Phase II!"
+    assert bfs_reachable(blocked_p2, lower_goal, (184, 84)), "Lower Route cannot reach Orfalch Echor (184,84)!"
+    assert bfs_reachable(blocked_p2, upper_goal, (184, 84)), "Upper Route cannot reach Orfalch Echor (184,84)!"
 
     blocked_p3 = set(blocked_p2)
     for g_idx in range(1, 8):

@@ -664,7 +664,7 @@ def _build_gondolin_walls_and_districts(
         (PlayerId.ONE, HOUSE_ID, 20, 82, 2), (PlayerId.ONE, HOUSE_ID, 20, 86, 2),
         (PlayerId.ONE, HOUSE_ID, 38, 46, 2), (PlayerId.ONE, HOUSE_ID, 42, 46, 2),
         (PlayerId.ONE, HOUSE_ID, 38, 78, 2), (PlayerId.ONE, HOUSE_ID, 42, 78, 2),
-        (PlayerId.ONE, HOUSE_ID, 30, 46, 2), (PlayerId.ONE, HOUSE_ID, 39, 58, 2),
+        (PlayerId.ONE, HOUSE_ID, 30, 41, 2), (PlayerId.ONE, HOUSE_ID, 39, 58, 2),
         (PlayerId.ONE, HOUSE_ID, 39, 68, 2), (PlayerId.ONE, PAVILION_ID, 30, 54, 2),
         # 2. South Quarter: House of the Wing (Tuor's Royal Guard & Noble Mansions)
         (PlayerId.ONE, BARRACKS_ID, 48, 34, 3), (PlayerId.ONE, BARRACKS_ID, 72, 34, 3),
@@ -674,7 +674,7 @@ def _build_gondolin_walls_and_districts(
         (PlayerId.ONE, HOUSE_ID, 44, 20, 2), (PlayerId.ONE, HOUSE_ID, 47, 20, 2),
         (PlayerId.ONE, HOUSE_ID, 75, 20, 2), (PlayerId.ONE, HOUSE_ID, 78, 20, 2),
         (PlayerId.ONE, HOUSE_ID, 44, 42, 2), (PlayerId.ONE, HOUSE_ID, 48, 45, 2),
-        (PlayerId.ONE, HOUSE_ID, 75, 45, 2), (PlayerId.ONE, HOUSE_ID, 78, 38, 2),
+        (PlayerId.ONE, HOUSE_ID, 69, 45, 2), (PlayerId.ONE, HOUSE_ID, 78, 38, 2),
         (PlayerId.ONE, HOUSE_ID, 53, 41, 2), (PlayerId.ONE, HOUSE_ID, 67, 41, 2),
         # 3. SW Quarter: House of the Tree & Wardens of the Secret Way (Idril & Galdor)
         (PlayerId.FOUR, BARRACKS_ID, 35, 19, 3), (PlayerId.FOUR, ARCHERY_RANGE_ID, 38, 35, 3),
@@ -688,15 +688,15 @@ def _build_gondolin_walls_and_districts(
         (PlayerId.TWO, PAVILION_ID, 86, 80, 2), (PlayerId.TWO, HOUSE_ID, 79, 40, 2),
         (PlayerId.TWO, HOUSE_ID, 82, 40, 2), (PlayerId.TWO, HOUSE_ID, 100, 36, 2),
         (PlayerId.TWO, HOUSE_ID, 94, 89, 2), (PlayerId.TWO, HOUSE_ID, 98, 89, 2),
-        (PlayerId.TWO, HOUSE_ID, 95, 79, 2), (PlayerId.TWO, HOUSE_ID, 99, 79, 2),
+        (PlayerId.TWO, HOUSE_ID, 95, 87, 2), (PlayerId.TWO, HOUSE_ID, 99, 87, 2),
         # 5. SE Quarter: Court of Salgant & House of the Harp
         (PlayerId.THREE, STABLE_ID, 81, 20, 3), (PlayerId.THREE, STABLE_ID, 100, 20, 3),
         (PlayerId.THREE, MONASTERY_ID, 28, 88, 3), (PlayerId.THREE, PAVILION_ID, 98, 29, 2),
         (PlayerId.THREE, HOUSE_ID, 86, 19, 2), (PlayerId.THREE, HOUSE_ID, 89, 19, 2),
-        (PlayerId.THREE, HOUSE_ID, 99, 26, 2), (PlayerId.THREE, HOUSE_ID, 95, 32, 2),
-        (PlayerId.THREE, HOUSE_ID, 89, 22, 2),
+        (PlayerId.THREE, HOUSE_ID, 99, 26, 2), (PlayerId.THREE, HOUSE_ID, 95, 30, 2),
+        (PlayerId.THREE, HOUSE_ID, 92, 20, 2),
         # 6. NE Quarter: House of the Golden Flower & Swallow (Glorfindel & Duilin)
-        (PlayerId.THREE, STABLE_ID, 86, 101, 3), (PlayerId.THREE, ARCHERY_RANGE_ID, 88, 85, 3),
+        (PlayerId.THREE, STABLE_ID, 89, 101, 3), (PlayerId.THREE, ARCHERY_RANGE_ID, 88, 85, 3),
         (PlayerId.THREE, UNIVERSITY_ID, 96, 94, 4), (PlayerId.THREE, PAVILION_ID, 77, 86, 2),
         (PlayerId.THREE, HOUSE_ID, 76, 102, 2), (PlayerId.THREE, HOUSE_ID, 77, 90, 2),
         (PlayerId.THREE, HOUSE_ID, 88, 90, 2), (PlayerId.THREE, HOUSE_ID, 96, 102, 2),
@@ -803,9 +803,10 @@ def build_map_and_entities(scenario: Any) -> dict[str, Any]:
         x: int,
         y: int,
         footprint: int = 3,
+        respect_roads: bool = True,
     ) -> Any:
         obj = grid.place_unit_safe(
-            um, player, unit_id, x, y, footprint=footprint, respect_roads=False, strict=True
+            um, player, unit_id, x, y, footprint=footprint, respect_roads=respect_roads, strict=True
         )
         quest_buildings[key] = {
             "ref_id": obj.reference_id,
@@ -828,36 +829,36 @@ def build_map_and_entities(scenario: Any) -> dict[str, Any]:
     grid.place_unit_safe(um, PlayerId.ONE, KEEP_ID, 66, 71, footprint=2, strict=True)
     player_bldg_counts[PlayerId.ONE] += 2
 
-    # Hall of the Fountain south of the water basin, while (61, 61) is a true water/statue fountain!
-    register_bldg("royal_fountain_bldg", PlayerId.TWO, MONASTERY_ID, 61, 52, footprint=3)
+    # Royal Fountain: a named statue monument standing IN the water basin (61, 61), not a building south of it
+    register_bldg("royal_fountain_bldg", PlayerId.TWO, STATUE_ID, 61, 61, footprint=1, respect_roads=False)
     for ox, oy in [(57, 58), (65, 58), (57, 64), (65, 64)]:
         grid.place_unit_safe(um, PlayerId.GAIA, STATUE_ID, ox, oy, footprint=1, strict=True)
         grid.place_unit_safe(um, PlayerId.GAIA, TORCH_ID, ox + 1, oy, footprint=1, strict=True)
 
-    # Sacred Trees Glingal (Gold Tree) & Belthil (Silver Tree): actual trees + statues instead of tents!
-    register_bldg("glingal_tree", PlayerId.GAIA, OLIVE_TREE_ID, 53, 61, footprint=1)
-    grid.place_unit_safe(um, PlayerId.GAIA, STATUE_ID, 53, 60, footprint=1, strict=True)
-    grid.place_unit_safe(um, PlayerId.GAIA, TORCH_ID, 52, 61, footprint=1, strict=True)
+    # Sacred Trees Glingal (Gold Tree) & Belthil (Silver Tree): named P4 statues (cursor names) + visual trees beside them
+    register_bldg("glingal_tree", PlayerId.FOUR, STATUE_ID, 53, 58, footprint=1, respect_roads=False)
+    grid.place_unit_safe(um, PlayerId.GAIA, OLIVE_TREE_ID, 53, 59, footprint=1, strict=True)
+    grid.place_unit_safe(um, PlayerId.GAIA, TORCH_ID, 52, 58, footprint=1, strict=True)
 
-    register_bldg("belthil_tree", PlayerId.GAIA, CYPRESS_TREE_ID, 69, 61, footprint=1)
-    grid.place_unit_safe(um, PlayerId.GAIA, STATUE_ID, 69, 60, footprint=1, strict=True)
-    grid.place_unit_safe(um, PlayerId.GAIA, TORCH_ID, 70, 61, footprint=1, strict=True)
+    register_bldg("belthil_tree", PlayerId.FOUR, STATUE_ID, 69, 58, footprint=1, respect_roads=False)
+    grid.place_unit_safe(um, PlayerId.GAIA, CYPRESS_TREE_ID, 69, 59, footprint=1, strict=True)
+    grid.place_unit_safe(um, PlayerId.GAIA, TORCH_ID, 70, 58, footprint=1, strict=True)
 
-    # Path A (West): Forges of Rog moved to (24, 56) & (24, 70) so the West Avenue (Y=61..65) is 100% clear!
-    register_bldg("great_forge", PlayerId.ONE, BLACKSMITH_ID, 24, 56, footprint=3)
-    register_bldg("forge_workshop", PlayerId.ONE, SIEGE_WORKSHOP_ID, 24, 70, footprint=4)
-    for cx_off in (29, 31, 33):
-        grid.place_unit_safe(um, PlayerId.ONE, UNIT_REFUGEE_CART_ID, cx_off, 57, footprint=1, strict=True)
+    # Path A (West): Forges of Rog placed clear of West Avenue (Y=60..66) and the Corridor X=23..29
+    register_bldg("great_forge", PlayerId.ONE, BLACKSMITH_ID, 20, 56, footprint=3)
+    register_bldg("forge_workshop", PlayerId.ONE, SIEGE_WORKSHOP_ID, 20, 70, footprint=4)
+    for cx_off in (20, 21, 22):
+        grid.place_unit_safe(um, PlayerId.ONE, UNIT_REFUGEE_CART_ID, cx_off, 59, footprint=1, strict=True)
 
     # Path B (East): Great Market of Penlod (north of East Avenue) & Fountain Aqueduct
-    register_bldg("great_market", PlayerId.TWO, MARKET_ID, 93, 56, footprint=4)
-    register_bldg("aqueduct_control", PlayerId.EIGHT, UNIVERSITY_ID, 84, 74, footprint=4)
+    register_bldg("great_market", PlayerId.TWO, MARKET_ID, 98, 56, footprint=4)
+    register_bldg("aqueduct_control", PlayerId.EIGHT, UNIVERSITY_ID, 90, 78, footprint=4)
 
     # North Quarter: Tower of Snow (P3 Duilin high vantage point)
     register_bldg("snow_watchtower", PlayerId.THREE, KEEP_ID, 74, 105, footprint=2)
 
     # Path C (South-East): Court of Salgant (House of the Harp) enclosed by wall + salgant_gate_rocks
-    register_bldg("salgant_manor", PlayerId.THREE, CASTLE_ID, 91, 25, footprint=4)
+    register_bldg("salgant_manor", PlayerId.THREE, CASTLE_ID, 95, 22, footprint=4)
     for wy in range(17, 34):
         if grid.can_place_footprint(84, wy, footprint=1, respect_roads=False):
             grid.place_unit_safe(um, PlayerId.THREE, FORTIFIED_WALL_ID, 84, wy, footprint=1, strict=True)
@@ -870,11 +871,11 @@ def build_map_and_entities(scenario: Any) -> dict[str, Any]:
         elif grid.can_place_footprint(bx, 33, footprint=1, respect_roads=False):
             grid.place_unit_safe(um, PlayerId.THREE, FORTIFIED_WALL_ID, bx, 33, footprint=1, strict=True)
     for hx in (89, 91, 93):
-        grid.place_unit_safe(um, PlayerId.THREE, UNIT_HARP_HEALER_ID, hx, 21, footprint=1, strict=True)
+        grid.place_unit_safe(um, PlayerId.THREE, UNIT_HARP_HEALER_ID, hx, 26, footprint=1, strict=True)
 
     # SW Quarter: House of Tuor & Caragdur Precipice (P4 completely sealed off at 0:00 by P8 Maeglin's wall & blockade!)
-    register_bldg("house_of_tuor", PlayerId.FOUR, KREPOST_ID, 24, 24, footprint=4)
-    register_bldg("caragdur_keep", PlayerId.EIGHT, KEEP_ID, 18, 42, footprint=2)
+    register_bldg("house_of_tuor", PlayerId.FOUR, KREPOST_ID, 20, 20, footprint=4)
+    register_bldg("caragdur_keep", PlayerId.EIGHT, KEEP_ID, 19, 41, footprint=2)
     for wx in range(17, 43):
         if grid.can_place_footprint(wx, 44, footprint=1, respect_roads=False):
             grid.place_unit_safe(um, PlayerId.EIGHT, FORTIFIED_WALL_ID, wx, 44, footprint=1, strict=True)
@@ -902,20 +903,22 @@ def build_map_and_entities(scenario: Any) -> dict[str, Any]:
         )
         destructible_rocks["aqueduct_dry_rocks"].append(r_obj.reference_id)
 
-    # Phase II Exit Gates & Siege Perimeter (Sealed at X=105 until Gothmog falls on Amon Gwareth!)
-    register_bldg("idril_waygate", PlayerId.FOUR, OUTPOST_ID, 73, 52, footprint=2)
-    for sx_wall in range(2, 106):
-        if grid.can_place_footprint(sx_wall, 124, footprint=1, respect_roads=False):
-            grid.place_unit_safe(um, PlayerId.GAIA, ROCK_CLIFF_ID, sx_wall, 124, footprint=1, clear_trees_around=False, strict=True)
-    for sy_wall in range(2, 125):
-        if 49 <= sy_wall <= 55 or 60 <= sy_wall <= 68:
+    # Phase II Exit Gates & Siege Perimeter (sealed until Gothmog falls on Amon Gwareth).
+    # The perimeter lies BEYOND the P5/P6 siege camps (Y=125..131 north, X=110..120 east) so the AI has free
+    # paths into the North/East Breaches at 1:05, while the human players stay 100% sealed in Gondolin.
+    register_bldg("idril_waygate", PlayerId.FOUR, OUTPOST_ID, 73, 52, footprint=2, respect_roads=False)
+    for sx_wall in range(2, 122):
+        if grid.can_place_footprint(sx_wall, 134, footprint=1, respect_roads=False):
+            grid.place_unit_safe(um, PlayerId.GAIA, ROCK_CLIFF_ID, sx_wall, 134, footprint=1, clear_trees_around=False, strict=True)
+    for sy_wall in range(2, 135):
+        if 33 <= sy_wall <= 45 or 82 <= sy_wall <= 94:
             r_obj = grid.place_unit_safe(
-                um, PlayerId.GAIA, ROCK_CLIFF_ID, 105, sy_wall, footprint=1, clear_trees_around=False, strict=True
+                um, PlayerId.GAIA, ROCK_CLIFF_ID, 121, sy_wall, footprint=1, clear_trees_around=False, strict=True
             )
             destructible_rocks["tumladen_exit_rocks"].append(r_obj.reference_id)
-        elif grid.can_place_footprint(105, sy_wall, footprint=1, respect_roads=False):
-            grid.place_unit_safe(um, PlayerId.GAIA, ROCK_CLIFF_ID, 105, sy_wall, footprint=1, clear_trees_around=False, strict=True)
-    # Rock ridge spine separating Lower Route (Y=36..44) from Upper Route (Y=60..92) across Tumladen
+        elif grid.can_place_footprint(121, sy_wall, footprint=1, respect_roads=False):
+            grid.place_unit_safe(um, PlayerId.GAIA, ROCK_CLIFF_ID, 121, sy_wall, footprint=1, clear_trees_around=False, strict=True)
+    # Rock ridge spine separating Lower Route (Y=33..45) from Upper Route (Y=82..94) across Tumladen
     for rx_spine in range(106, 172):
         if grid.can_place_footprint(rx_spine, 55, footprint=1, respect_roads=False):
             grid.place_unit_safe(um, PlayerId.GAIA, ROCK_CLIFF_ID, rx_spine, 55, footprint=1, clear_trees_around=False, strict=True)
@@ -933,13 +936,14 @@ def build_map_and_entities(scenario: Any) -> dict[str, Any]:
     # =========================================================================
     # 2. PHASE II & III STRUCTURES: TUMLADEN & ARCHITECTURAL SEVEN GATES
     # =========================================================================
-    register_bldg("wolf_camp_1", PlayerId.FIVE, STABLE_ID, 132, 94, footprint=3)
-    register_bldg("wolf_camp_2", PlayerId.FIVE, STABLE_ID, 156, 94, footprint=3)
-    register_bldg("balrog_altar", PlayerId.SEVEN, KREPOST_ID, 145, 112, footprint=4)
-    register_bldg("cliff_tower_1", PlayerId.FIVE, GUARD_TOWER_ID, 132, 62, footprint=2)
-    register_bldg("cliff_tower_2", PlayerId.FIVE, GUARD_TOWER_ID, 156, 62, footprint=2)
+    register_bldg("wolf_camp_1", PlayerId.FIVE, STABLE_ID, 132, 96, footprint=3, respect_roads=False)
+    register_bldg("wolf_camp_2", PlayerId.FIVE, STABLE_ID, 156, 96, footprint=3, respect_roads=False)
+    register_bldg("balrog_altar", PlayerId.SEVEN, KREPOST_ID, 145, 112, footprint=4, respect_roads=False)
+    register_bldg("cliff_tower_1", PlayerId.FIVE, GUARD_TOWER_ID, 132, 62, footprint=2, respect_roads=False)
+    register_bldg("cliff_tower_2", PlayerId.FIVE, GUARD_TOWER_ID, 156, 62, footprint=2, respect_roads=False)
 
-    # Architectural Seven Gates of Orfalch Echor: paired flanking towers + removable rock barrier
+    # Architectural Seven Gates of Orfalch Echor: paired flanking towers + removable rock barrier.
+    # Flanking towers belong to GAIA so they never shoot the heroes before the gates are opened.
     gate_configs: list[tuple[str, int, int, int]] = [
         ("orfalch_gate_1", 190, 94, OUTPOST_ID),      # 1. Gate of Wood
         ("orfalch_gate_2", 198, 108, GUARD_TOWER_ID), # 2. Gate of Stone
@@ -950,9 +954,8 @@ def build_map_and_entities(scenario: Any) -> dict[str, Any]:
         ("orfalch_gate_7", 190, 174, KEEP_ID),        # 7. Great Gate of Steel
     ]
     for g_key, gx, gy, tower_id in gate_configs:
-        grid.place_unit_safe(um, PlayerId.ONE, tower_id, gx - 6, gy, footprint=2, strict=True)
-        grid.place_unit_safe(um, PlayerId.ONE, tower_id, gx + 5, gy, footprint=2, strict=True)
-        player_bldg_counts[PlayerId.ONE] += 2
+        grid.place_unit_safe(um, PlayerId.GAIA, tower_id, gx - 6, gy, footprint=2, strict=True)
+        grid.place_unit_safe(um, PlayerId.GAIA, tower_id, gx + 5, gy, footprint=2, strict=True)
         for dx in range(-4, 5):
             r_obj = grid.place_unit_safe(
                 um, PlayerId.GAIA, ROCK_CLIFF_ID, gx + dx, gy, footprint=1, clear_trees_around=False, strict=True
@@ -972,9 +975,10 @@ def build_map_and_entities(scenario: Any) -> dict[str, Any]:
         if grid.can_place_footprint(174, gy_canyon, footprint=1, respect_roads=False):
             grid.place_unit_safe(um, PlayerId.GAIA, ROCK_CLIFF_ID, 174, gy_canyon, footprint=1, clear_trees_around=False, strict=True)
 
-    register_bldg("winch_bronze", PlayerId.FIVE, OUTPOST_ID, 188, 114, footprint=2)
-    register_bldg("winch_silver", PlayerId.FIVE, OUTPOST_ID, 194, 144, footprint=2)
-    register_bldg("winch_steel", PlayerId.SEVEN, KEEP_ID, 180, 171, footprint=2)
+    # Avalanche winches: unarmed mills (never shoot the heroes), still destroyable objectives for P3
+    register_bldg("winch_bronze", PlayerId.FIVE, MILL_ID, 191, 114, footprint=2, respect_roads=False)
+    register_bldg("winch_silver", PlayerId.FIVE, MILL_ID, 195, 144, footprint=2, respect_roads=False)
+    register_bldg("winch_steel", PlayerId.SEVEN, MILL_ID, 183, 170, footprint=2, respect_roads=False)
 
     # Seal the X=218 precipice line across Y=175..238, with cirith_exit_rocks at Y=218..226
     for cy_exit in range(175, 238):
@@ -992,9 +996,9 @@ def build_map_and_entities(scenario: Any) -> dict[str, Any]:
     # =========================================================================
     starts: dict[PlayerId, tuple[int, int]] = {
         PlayerId.ONE: (61, 24),
-        PlayerId.TWO: (82, 58),
-        PlayerId.THREE: (68, 92),
-        PlayerId.FOUR: (28, 28),
+        PlayerId.TWO: (80, 48),
+        PlayerId.THREE: (70, 86),
+        PlayerId.FOUR: (28, 26),
     }
     for sx, sy in starts.values():
         grid.mark_road_box(sx - 6, sy - 4, sx + 6, sy + 8)
@@ -1023,57 +1027,89 @@ def build_map_and_entities(scenario: Any) -> dict[str, Any]:
     }
 
     retinues = get_retinue_configs()
+
+    def place_near(player: PlayerId, unit_id: int, x: int, y: int, max_radius: int = 8) -> Any:
+        """Place a 1x1 unit on the nearest free tile to (x, y) searching in expanding square rings."""
+        for radius in range(max_radius + 1):
+            for dy in range(-radius, radius + 1):
+                for dx in range(-radius, radius + 1):
+                    if max(abs(dx), abs(dy)) != radius:
+                        continue
+                    if grid.can_place_footprint(x + dx, y + dy, footprint=1, respect_roads=False):
+                        return grid.place_unit_safe(
+                            um, player, unit_id, x + dx, y + dy, footprint=1, strict=True
+                        )
+        msg = f"[KOLIZJA SIATKI] Brak wolnego pola w promieniu {max_radius} od ({x}, {y}) dla unit_id={unit_id}!"
+        raise ValueError(msg)
+
+    # Explicit hero anchors; P4 heroes are tucked away from P8's Caragdur wall and 0:00 enemy sight lines.
+    hero_anchors: dict[int, tuple[int, int]] = {
+        HERO_EARENDIL_ID: (18, 18),
+        HERO_IDRIL_ID: (24, 21),
+        HERO_GALDOR_ID: (28, 25),
+    }
     for p_id in HUMAN_PLAYERS:
         sx, sy = starts[p_id]
         for idx, h_id in enumerate(player_heroes[p_id]):
-            grid.place_unit_safe(um, p_id, h_id, sx + idx * 2 - 1, sy, footprint=1, strict=True)
+            ax, ay = hero_anchors.get(h_id, (sx + idx * 2 - 1, sy))
+            place_near(p_id, h_id, ax, ay)
 
         offset_idx = 0
         for unit_id, count in retinues[p_id]:
             for _ in range(count):
                 dx = (offset_idx % 7) - 3
                 dy = (offset_idx // 7) + 2
-                grid.place_unit_safe(um, p_id, unit_id, sx + dx, sy + dy, footprint=1, strict=True)
+                place_near(p_id, unit_id, sx + dx, sy + dy)
                 offset_idx += 1
 
-    # Balance Sanctuary King & initial Map Revealers (allow_overlap=True for invisible revealers)
-    grid.place_unit_safe(um, PlayerId.ONE, SANCTUARY_KING_ID, 12, 228, footprint=1, strict=True)
-    grid.place_unit_safe(um, PlayerId.ONE, MAP_REVEALER_ID, 12, 228, footprint=1, allow_overlap=True)
-    grid.place_unit_safe(um, PlayerId.ONE, MAP_REVEALER_ID, 61, 61, footprint=1, allow_overlap=True)
-    player_bldg_counts[PlayerId.ONE] += 2
+    # Balance Sanctuary: King in the centre of the compact chamber + 3 Map Revealers lighting 100% of it
+    # (UP = harder, DOWN = easier on the isometric screen; revealers stay >20 tiles from NW state torches)
+    grid.place_unit_safe(um, PlayerId.ONE, SANCTUARY_KING_ID, 12, 227, footprint=1, strict=True)
+    for rev_y in (224, 227, 230):
+        grid.place_unit_safe(um, PlayerId.ONE, MAP_REVEALER_ID, 12, rev_y, footprint=1, allow_overlap=True)
+    grid.place_unit_safe(um, PlayerId.ONE, MAP_REVEALER_ID, 61, 63, footprint=1, allow_overlap=True)
+    player_bldg_counts[PlayerId.ONE] += 5
 
     for rg in refugee_groups:
         for i in range(4):
-            grid.place_unit_safe(
-                um, PlayerId.GAIA, UNIT_REFUGEE_CIV_ID, rg["x"] + (i % 2), rg["y"] + (i // 2), footprint=1, strict=True
-            )
+            place_near(PlayerId.GAIA, UNIT_REFUGEE_CIV_ID, rg["x"] + (i % 2), rg["y"] + (i // 2), max_radius=3)
 
-    # P5-P8 initial military buildings & combat units at 0:00 (prevents early Defeat)
-    grid.place_unit_safe(um, PlayerId.FIVE, BARRACKS_ID, 52, 118, footprint=3, strict=True)
-    grid.place_unit_safe(um, PlayerId.FIVE, ARCHERY_RANGE_ID, 70, 118, footprint=3, strict=True)
+    # =========================================================================
+    # 5. P5-P8 INITIAL FORCES at 0:00 — parked OUTSIDE tower/unit sight of P1-P4 for a calm opening (0:00..0:50)
+    # =========================================================================
+    # P5 Northern siege forecourt (north of the perimeter gap, Y=125..131) + Morgoth siege props
+    grid.place_unit_safe(um, PlayerId.FIVE, BARRACKS_ID, 52, 127, footprint=3, respect_roads=False, strict=True)
+    grid.place_unit_safe(um, PlayerId.FIVE, ARCHERY_RANGE_ID, 70, 127, footprint=3, respect_roads=False, strict=True)
     for i in range(8):
-        grid.place_unit_safe(
-            um, PlayerId.FIVE, ENEMY_ORC_INFANTRY_ID, 58 + (i % 4), 104 + (i // 4), footprint=1, strict=True
-        )
+        place_near(PlayerId.FIVE, ENEMY_ORC_INFANTRY_ID, 55 + (i % 4), 126 + (i // 4), max_radius=3)
+    for prop_id, px, py in [
+        (ARMY_TENT_A_ID, 48, 130), (ARMY_TENT_B_ID, 74, 130), (FLAME_EFFECT_ID, 56, 124),
+        (FLAME_EFFECT_ID, 66, 124), (FORTIFIED_PALISADE_ID, 50, 124), (FORTIFIED_PALISADE_ID, 72, 124),
+    ]:
+        grid.place_unit_safe(um, PlayerId.GAIA, prop_id, px, py, footprint=1, strict=True)
     for i in range(4):
-        grid.place_unit_safe(um, PlayerId.FIVE, ENEMY_ORC_ARCHER_ID, 131 + i, 65, footprint=1, strict=True)
-        grid.place_unit_safe(um, PlayerId.FIVE, ENEMY_ORC_ARCHER_ID, 155 + i, 65, footprint=1, strict=True)
+        place_near(PlayerId.FIVE, ENEMY_ORC_ARCHER_ID, 131 + i, 66, max_radius=3)
+        place_near(PlayerId.FIVE, ENEMY_ORC_ARCHER_ID, 155 + i, 66, max_radius=3)
 
-    grid.place_unit_safe(um, PlayerId.SIX, SIEGE_WORKSHOP_ID, 61, 120, footprint=4, strict=True)
-    grid.place_unit_safe(um, PlayerId.SIX, SIEGE_WORKSHOP_ID, 109, 63, footprint=4, strict=True)
-    grid.place_unit_safe(um, PlayerId.SIX, ENEMY_IRON_DRAGON_RAM_ID, 61, 116, footprint=1, strict=True)
-    grid.place_unit_safe(um, PlayerId.SIX, ENEMY_FIRE_DRAKE_ID, 59, 116, footprint=1, strict=True)
-    grid.place_unit_safe(um, PlayerId.SIX, ENEMY_HEAVY_SCORPION_ID, 63, 116, footprint=1, strict=True)
-    grid.place_unit_safe(um, PlayerId.SIX, ENEMY_IRON_DRAGON_RAM_ID, 102, 63, footprint=1, strict=True)
+    # P6 siege workshops & machines in the northern and eastern forecourts (outside Gondolin's walls)
+    grid.place_unit_safe(um, PlayerId.SIX, SIEGE_WORKSHOP_ID, 61, 129, footprint=4, respect_roads=False, strict=True)
+    grid.place_unit_safe(um, PlayerId.SIX, SIEGE_WORKSHOP_ID, 117, 63, footprint=4, respect_roads=False, strict=True)
+    place_near(PlayerId.SIX, ENEMY_IRON_DRAGON_RAM_ID, 61, 125, max_radius=3)
+    place_near(PlayerId.SIX, ENEMY_FIRE_DRAKE_ID, 59, 125, max_radius=3)
+    place_near(PlayerId.SIX, ENEMY_HEAVY_SCORPION_ID, 63, 125, max_radius=3)
+    place_near(PlayerId.SIX, ENEMY_IRON_DRAGON_RAM_ID, 113, 63, max_radius=3)
+    for prop_id, px, py in [(ARMY_TENT_A_ID, 114, 68), (ARMY_TENT_B_ID, 114, 58), (FLAME_EFFECT_ID, 112, 63)]:
+        grid.place_unit_safe(um, PlayerId.GAIA, prop_id, px, py, footprint=1, strict=True)
 
-    grid.place_unit_safe(um, PlayerId.SEVEN, CASTLE_ID, 145, 119, footprint=4, strict=True)
-    grid.place_unit_safe(um, PlayerId.SEVEN, ENEMY_BALROG_BOSS_ID, 145, 108, footprint=1, strict=True)
-    grid.place_unit_safe(um, PlayerId.SEVEN, ENEMY_BALROG_BOSS_ID, 184, 173, footprint=1, strict=True)
+    grid.place_unit_safe(um, PlayerId.SEVEN, CASTLE_ID, 145, 119, footprint=4, respect_roads=False, strict=True)
+    place_near(PlayerId.SEVEN, ENEMY_BALROG_BOSS_ID, 145, 108, max_radius=3)
+    place_near(PlayerId.SEVEN, ENEMY_BALROG_BOSS_ID, 184, 173, max_radius=3)
 
-    grid.place_unit_safe(um, PlayerId.EIGHT, BARRACKS_ID, 19, 38, footprint=3, strict=True)
+    # P8 Maeglin's traitor barracks inside the sealed Caragdur enclave (Corridor X=23..29 stays free)
+    grid.place_unit_safe(um, PlayerId.EIGHT, BARRACKS_ID, 36, 41, footprint=3, respect_roads=True, strict=True)
     for i in range(4):
-        grid.place_unit_safe(um, PlayerId.EIGHT, ENEMY_MOLE_TRAITOR_ID, 21 + i, 40, footprint=1, strict=True)
-        grid.place_unit_safe(um, PlayerId.EIGHT, ENEMY_MOLE_PIKE_ID, 83 + i, 70, footprint=1, strict=True)
+        place_near(PlayerId.EIGHT, ENEMY_MOLE_TRAITOR_ID, 21 + i, 42, max_radius=3)
+        place_near(PlayerId.EIGHT, ENEMY_MOLE_PIKE_ID, 87 + i, 74, max_radius=3)
 
     _populate_forests_and_borders(grid, um)
 
@@ -1085,8 +1121,8 @@ def build_map_and_entities(scenario: Any) -> dict[str, Any]:
         "starts": starts,
         "player_bldg_counts": player_bldg_counts,
         "sanctuary": {
-            "x1": 5, "y1": 221, "x2": 19, "y2": 235, "cx": 12, "cy": 228,
-            "harder_area": (8, 232, 16, 235), "easier_area": (8, 221, 16, 224),
+            "x1": 9, "y1": 223, "x2": 15, "y2": 231, "cx": 12, "cy": 227,
+            "harder_area": (9, 223, 15, 225), "easier_area": (9, 229, 15, 231),
         },
         "checkpoints": {
             "phase1": {PlayerId.ONE: (61, 49), PlayerId.TWO: (66, 56), PlayerId.THREE: (61, 66), PlayerId.FOUR: (55, 56)},
@@ -1096,8 +1132,8 @@ def build_map_and_entities(scenario: Any) -> dict[str, Any]:
         "sectors": {
             "caragdur_gate": (38, 20, 46, 32),
             "caragdur_cliff": (14, 36, 26, 48),
-            "aqueduct_sluice": (78, 68, 90, 80),
-            "north_fire_zone": (52, 90, 70, 104),
+            "aqueduct_sluice": (84, 72, 96, 84),
+            "north_fire_zone": (55, 98, 67, 105),
             "north_moat": (44, 110, 78, 118),
             "tower_of_snow": (70, 102, 78, 110),
             "enclave_forges": (18, 52, 34, 74),
@@ -1113,9 +1149,9 @@ def build_map_and_entities(scenario: Any) -> dict[str, Any]:
             "upper_cliff_2": (152, 58, 160, 66),
             "rog_altar_zone": (138, 106, 152, 118),
             "orfalch_gathering": (178, 78, 192, 92),
-            "winch_bronze_zone": (184, 110, 192, 118),
+            "winch_bronze_zone": (184, 110, 194, 118),
             "winch_silver_zone": (190, 140, 198, 148),
-            "winch_steel_zone": (176, 168, 184, 176),
+            "winch_steel_zone": (176, 168, 186, 176),
             "cirith_thoronath": (186, 176, 204, 218),
             "glorfindel_duel_ledge": (192, 193, 204, 203),
             "sirion_exit": (219, 216, 232, 230),

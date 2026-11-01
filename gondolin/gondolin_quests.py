@@ -834,9 +834,9 @@ def _setup_phase1_city_and_dilemmas(tm: Any, ctx: dict[str, Any]) -> list[Any]:
         tm,
         "Aqueduct_Guard",
         (aq_x1 - 4, aq_y1 - 4, aq_x2 + 4, aq_y2 + 4),
-        (84, 70),
-        [(PlayerId.EIGHT, ENEMY_MOLE_TRAITOR_ID, 6, 84, 76)],
-        [(PlayerId.EIGHT, ENEMY_ORC_BRUTE_ID, 5, 86, 78)],
+        (88, 74),
+        [(PlayerId.EIGHT, ENEMY_MOLE_TRAITOR_ID, 6, 86, 74)],
+        [(PlayerId.EIGHT, ENEMY_ORC_BRUTE_ID, 5, 86, 82)],
         trigger_player=PlayerId.TWO,
     )
 
