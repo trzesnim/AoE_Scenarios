@@ -371,6 +371,47 @@ Po wykryciu obiektów zwłok (`693, 1124, 1130, 756`), pocisku (`469`) oraz akty
 
 ---
 
+## [2026-11-02] Stabilizacja po audycie forensycznym: Immobile AI, HP bohaterów (1150/1150) i eliminacja hangów w 0:27
+
+### 1. Weryfikacja Immobile AI i poprawka kolejności inicjalizacji bohaterów
+- **Potwierdzenie w strumieniu `.aoe2record`:**
+  - W strumieniu komend z nagrań playtestowych zbadano rozkazy AI (`cmd=0x0a` / `0x02c2`).
+  - Liczba rozkazów PromiDE AI wyniosła dokładnie `AI_ORDER = 0` we wszystkich analizowanych nagraniach.
+  - Fizyczna instalacja plików `Immobile AI.ai` i `Immobile AI.per` bezpośrednio w folderze zasobów gry (`resources/_common/ai`) oraz blokada `set_immobile_ai()` + `lock_personality = True` całkowicie spacyfikowały silnik sztucznej inteligencji.
+- **Naprawa MaxHP bohaterów (Idril 1150/1150 HP):**
+  - W silniku Genie wywołanie `change_object_name` w `0:01` klonowało prywatny `master_obj` jednostek pre-placed przed zaaplikowaniem `modify_attribute`, co zamrażało bazowe statystyki fabryczne modeli.
+  - Skorygowano harmonogram timerów startowych:
+    * `timer = 1`: technologie/dyplomacja oraz wszystkie 4 triggery statystyk `modify_attribute` (`Init_03s_Noldor_Retinue_Stats`, `Init_03s_Noldor_Hero_Stats`, `Init_03s_Morgoth_Enemy_Stats`, `Init_03s_Morgoth_Boss_Stats`) — wykonywane PRZED zmianą nazw.
+    * `timer = 2`: trigger leczący `Init_04s_Full_Heal_After_MaxHP` (`heal_object` podnoszący bieżące HP do nowego MaxHP).
+    * `timer = 3`: trigger nadający nazwy fabularne `Init_01s_Techs_And_Names` (`change_object_name`).
+  - Efekt w grze: Idril posiada pełne 1150/1150 HP, a pozostali bohaterowie (Tuor 1000/1000, Ecthelion 1200/1200, Glorfindel 1200/1200, Turgon 2500/2500) startują z pełnym paskiem zdrowia.
+
+### 2. Mechanizm zawieszenia w 0:27 i trwałe rozwiązanie
+- **Analiza przyczyny awarii `AppHangB1` w 0:26.99 i 0:28.70 (ostatni komunikat `[DBG #12]`):**
+  - Od `0:00` Twierdza `caragdur_keep` (`KEEP_ID = 235`, należąca do P8) prowadziła nieustanny ostrzał palisady (`FORTIFIED_WALL_ID = 155`, 250 HP) oddzielającej enklawę Caragdûr od bazy P4 na kafelkach `(16, 35..48)`.
+  - Jednocześnie wieża obronna P4 na `(16, 36)` i wieża P1 na `(47, 49)` ostrzeliwały mur i twierdzę P8, wywołując nieustanny alarm ataku od startu gry.
+  - Dokładnie w `~27.` sekundzie gry segment palisady ulegał zniszczeniu pod skomasowanym ogniem. Nagłe przerwanie zamkniętego korytarza na granicy stref wywoływało załamanie siatki pathfindingu silnika Genie przy próbie przekierowania jednostek patrolowych/budynków obronnych, skutkując zawieszeniem wątku `AppHangB1`.
+- **Wdrożone trwałe rozwiązanie:**
+  1. **Rozbrojenie Twierdzy Caragdûr (`caragdur_keep`, P8):**
+     - W triggerze `Init_03s_Morgoth_Enemy_Stats` (`timer=1`) dodano efekty `modify_attribute` dla `source_player=PlayerId.EIGHT`, `object_list_unit_id=KEEP_ID`:
+       * `ATTR_MAXIMUM_RANGE` (`attr=12`) ustawione na `quantity=0.001` (wartość `0.001` kafelka uniemożliwia namierzanie celów poza obrysem budynku, omijając jednocześnie błąd falsy `0.0` w `AoE2ScenarioParser 0.9.8`).
+       * `ATTR_ATTACK` (`attr=9`) dla `ARMOR_CLASS_PIERCE` (`class=3`) ustawione na `0`.
+       * `ATTR_ATTACK` (`attr=9`) dla `ARMOR_CLASS_MELEE` (`class=4`) ustawione na `0`.
+  2. **Transfer palisad Caragdûr do `PlayerId.GAIA`:**
+     - Segmenty muru `FORTIFIED_WALL_ID = 155` na linii podziału `X=16, 35 <= Y <= 48` oraz mury obwodowe enklawy na `Y=44` i `X=42` przekazano do gracza neutralnego `GAIA`. Wieże graczy i twierdza wroga nie atakują neutralnych ścian, likwidując fałszywy alarm i przedwczesne wyłomy.
+  3. **Usunięcie pre-placed łuczników orków P5:**
+     - Usunięto 8 jednostek `ENEMY_ORC_ARCHER_ID` z Doliny Tumladen, dzięki czemu liczba mobilnych jednostek wojskowych P5–P8 w `0:00` wynosi dokładnie `0`.
+  4. **Stan jednostek Morgotha w `0:00`:**
+     - Łącznie 16 obiektów statycznych/budynków (koszary, wieże, warsztaty, zamek, twierdza). 0 jednostek mobilnych, 0 palisad P8.
+
+### 3. Zadania dla Etapu 8 (sesja z modelami zaawansowanymi)
+1. Dynamiczny spawn wrogów w Tumladen i Orfalch (zamiast jednostek pre-placed).
+2. Rewizja logiki `LocalRallyHealLoop` pod kątem eliminacji sygnatury `86fd` (hang po śmierci Galdora w 1:29).
+3. Testy obciążeniowe i dynamiczne bramy Orfalchu w Etapie 7.
+4. Wyłączenie instrumentacji `DEBUG_CHAT` po pełnej stabilizacji.
+
+---
+
 ### 2. Aktualny stan weryfikacji i testów
 
 Wszystkie zestawy testów przechodzą w 100% na zielono:
@@ -400,6 +441,8 @@ ZREALIZOWANO DOTYCHCZAS:
 - Etap 4: Cisza bojowa [0:00, 0:50), Maeglin w 0:50, Smoki w 1:05, dwukierunkowy automat Sanktuarium Balansu (-2..+2 z teleport_object Króla).
 - Etap 5 (Część UI & Balrogi): Usunięcie atrapowego timer=999999 z 18 triggerów UI_*, wdrożenie realnych warunków ukończenia i natywnego strikethrough w silniku, naprawa nagrody w Kuźniach Roga (usunięcie 2 statycznych Balrogów P7 i ołtarz P8).
 - Etap 6: Nowa estetyka i geometria mapy (0 kolizji, 5568 drzew, bramy miejskie 64/88, kołowroty GAIA, posągi Glingal/Belthil).
+- Stabilizacja forensyczna: Potwierdzenie instalacji Immobile AI (AI_ORDER = 0 w nagraniach), naprawa kolejności timerów (HP bohaterów 1150/1150), rozbrojenie Twierdzy Caragdûr (KEEP_ID range=0.001, atk=0), transfer murów Caragdûr do GAIA i usunięcie pre-placed orków P5 (likwidacja hangów w 0:27 i alarmu od 0:00).
+- Etap 8 (Zdefiniowany w ROADMAP.md): Plan dalszej analizy dla modeli flagowych (dynamiczny spawn wrogów, eliminacja sig 86fd w LocalRallyHealLoop, testy bram Orfalchu, wyłączenie DEBUG_CHAT).
 
 KOLEJNE ZADANIE DO WYKONANIA (ETAP 7 Z ROADMAP.md):
 1. Rozbudowa testów BFS w `gondolin/test_stage_b_grid.py`:

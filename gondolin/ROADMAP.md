@@ -467,6 +467,20 @@ Każdy etap podlega trójpoziomowej weryfikacji:
 * **Sposób weryfikacji:**
 * *Poziom 1, 2 i 3:* 100% PASS w `test_stage_a_logic.py`, `test_stage_b_grid.py` i `generate_gondolin_scenario.py` oraz końcowy test przejścia Faz I–III w grze *AoE2: DE*.
 
+---
+
+## Etap 8: Plan dalszej analizy i docelowych zmian dla modeli flagowych
+
+1. **Dynamiczny spawn wrogów w Tumladen i Orfalch (zamiast jednostek pre-placed):**
+   - Całkowite zastąpienie pre-placed jednostek wojskowych wrogów dynamicznymi falami spawnującymi się w odpowiednich momentach fazy scenariusza (likwidacja ryzyka wczesnej aktywacji patrolowej lub błędów kolizyjnych na starcie).
+2. **Rewizja logiki LocalRallyHealLoop pod kątem eliminacji sygnatury 86fd (hang po śmierci Galdora w 1:29):**
+   - Dogłębna analiza mechanizmu pętli leczniczej po śmierci bohaterów i usunięcie potencjalnego wycieku / deadlocku wywołań w silniku Genie.
+3. **Testy obciążeniowe i dynamiczne bramy Orfalchu w Etapie 7:**
+   - Wdrożenie symulacji sekwencyjnego otwierania i niszczenia każdej z 7 bram wąwozu *Orfalch Echor* wraz z weryfikacją drożności ścieżek jednostek ucieczkowych.
+4. **Wyłączenie instrumentacji DEBUG_CHAT po pełnej stabilizacji:**
+   - Wyczyszczenie triggerów z pomocniczych efektów Send Chat [DBG #...] po ostatecznym potwierdzeniu stabilności rozgrywki (0 crashy/hangów w pełnym playteście).
+
+
 - [x] **Weryfikacja pętli `looping = True` + `Timer`:** Zbadano empirycznie plikiem `Gondolin_A2B_T1_LoopTimerProbe5s`. Mechanizm działa poprawnie, wykonując akcje co 5 sekund. Hipoteza awarii silnika przez pętle czasowe ODRZUCONA.
 - [x] **Narzędzia diagnostyczne Runtime CTD (`validate_scenario.py` + `DEBUG_CHAT`):** Wdrożono automatyczny zestaw testów `pytest` (6 klas błędów CTD: `armour_attack_class`, pętle bez `Timer >= 1`, odwrócone prostokąty obszarów, wyjście poza granice mapy, operacje na usuniętych obiektach oraz operacje na obiektach zwłok `DEAD_ID` i pociskach `ProjectileInfo`) oraz instrumentację `inject_debug_chat_into_triggers` (`DEBUG_CHAT = True`, 1 efekt `Send Chat` dla P1 na początku każdego z 322 triggerów).
 - [x] **Izolacja i naprawa Runtime CTD w triggerach oraz ID jednostek:** Naprawiono wszystkie błędy wykryte przez `validate_scenario.py` oraz audyt (`8/8 PASS` w `pytest`, `100% PASS` w `test_stage_a_logic.py` i `test_stage_b_grid.py`): wymieniono 7 błędnych ID (`693->694`, `1124->1125`, `1130->1131`, `756->757`, `469->868`, `532->892`, `682->200`), skorygowano `HERO_RANGED_IDS`, usunięto bezczasową pętlę `#317`/`#318`, zabezpieczono `P6_Dragon_Drop_*` limitem populacji i anty-tłokiem oraz dodano strażnika przed zapisem w `generate_gondolin_scenario.py` (pozostawiono `DEBUG_CHAT = True` do weryfikacji 3× 3–5 min w grze), przy pełnej walidacji na:

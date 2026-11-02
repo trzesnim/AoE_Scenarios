@@ -44,6 +44,7 @@ from gondolin_config import (
     HERO_EGALMOTH_ID,
     HERO_ROG_ID,
     HUMAN_PLAYERS,
+    KEEP_ID,
     MAP_REVEALER_ID,
     MAP_SIZE,
     OBJECT_TYPE_MILITARY,
@@ -992,6 +993,37 @@ def _setup_t_init_and_unit_scaling(tm: Any, ctx: dict[str, Any]) -> None:
                 armour_attack_class=ARMOR_CLASS_PIERCE,
                 armour_attack_quantity=e_cfg["pierce_armor"],
             )
+
+    # Disarm Caragdur Keep (P8) so it does not attack P4 base across walls at 0:00
+    # Note: quantity=0.001 used instead of 0 because AoE2ScenarioParser 0.9.8 has a bug in
+    # Effect.__init__ ('quantity = _quantity_float or quantity') where 0.0 evaluates to falsy
+    # and collapses float quantity 0.0 to -1 on scenario reload. 0.001 tiles disables range completely.
+    safe_call(
+        t_enemy_stats.new_effect.modify_attribute,
+        source_player=PlayerId.EIGHT,
+        object_list_unit_id=KEEP_ID,
+        object_attributes=ATTR_MAXIMUM_RANGE,
+        operation=Operation.SET,
+        quantity=0.001,
+    )
+    safe_call(
+        t_enemy_stats.new_effect.modify_attribute,
+        source_player=PlayerId.EIGHT,
+        object_list_unit_id=KEEP_ID,
+        object_attributes=ATTR_ATTACK,
+        operation=Operation.SET,
+        armour_attack_class=ARMOR_CLASS_PIERCE,
+        armour_attack_quantity=0,
+    )
+    safe_call(
+        t_enemy_stats.new_effect.modify_attribute,
+        source_player=PlayerId.EIGHT,
+        object_list_unit_id=KEEP_ID,
+        object_attributes=ATTR_ATTACK,
+        operation=Operation.SET,
+        armour_attack_class=ARMOR_CLASS_MELEE,
+        armour_attack_quantity=0,
+    )
 
     # Trigger at 0:03 (4/4): Morgoth bosses and siege machines (Maeglin, Gothmog, Balrog, Iron Dragon, Uruloki)
     t_init_stats = tm.add_trigger(

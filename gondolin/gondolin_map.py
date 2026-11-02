@@ -636,7 +636,8 @@ def _build_gondolin_walls_and_districts(
 
     for wy in range(16, 112):
         if not (61 <= wy <= 64) and grid.can_place_footprint(16, wy, footprint=1, respect_roads=False):
-            place_bldg(PlayerId.FOUR, FORTIFIED_WALL_ID, 16, wy, footprint=1, respect_roads=False)
+            wall_owner = PlayerId.GAIA if (35 <= wy <= 48) else PlayerId.FOUR
+            place_bldg(wall_owner, FORTIFIED_WALL_ID, 16, wy, footprint=1, respect_roads=False)
         if not (50 <= wy <= 54 or 57 <= wy <= 69) and grid.can_place_footprint(104, wy, footprint=1, respect_roads=False):
             place_bldg(PlayerId.TWO, FORTIFIED_WALL_ID, 104, wy, footprint=1, respect_roads=False)
 
@@ -878,7 +879,7 @@ def build_map_and_entities(scenario: Any) -> dict[str, Any]:
     register_bldg("caragdur_keep", PlayerId.EIGHT, KEEP_ID, 19, 41, footprint=2)
     for wx in range(17, 43):
         if grid.can_place_footprint(wx, 44, footprint=1, respect_roads=False):
-            grid.place_unit_safe(um, PlayerId.EIGHT, FORTIFIED_WALL_ID, wx, 44, footprint=1, strict=True)
+            grid.place_unit_safe(um, PlayerId.GAIA, FORTIFIED_WALL_ID, wx, 44, footprint=1, strict=True)
     for by in range(17, 45):
         if 23 <= by <= 29:
             r_obj = grid.place_unit_safe(
@@ -886,7 +887,7 @@ def build_map_and_entities(scenario: Any) -> dict[str, Any]:
             )
             destructible_rocks["caragdur_blockade"].append(r_obj.reference_id)
         elif grid.can_place_footprint(42, by, footprint=1, respect_roads=False):
-            grid.place_unit_safe(um, PlayerId.EIGHT, FORTIFIED_WALL_ID, 42, by, footprint=1, strict=True)
+            grid.place_unit_safe(um, PlayerId.GAIA, FORTIFIED_WALL_ID, 42, by, footprint=1, strict=True)
 
     # North Quarter Fire Hazard (hurts units until P2 captures aqueduct_control)
     for fx in range(56, 67, 3):
@@ -1085,9 +1086,6 @@ def build_map_and_entities(scenario: Any) -> dict[str, Any]:
         (FLAME_EFFECT_ID, 66, 124), (FORTIFIED_PALISADE_ID, 50, 124), (FORTIFIED_PALISADE_ID, 72, 124),
     ]:
         grid.place_unit_safe(um, PlayerId.GAIA, prop_id, px, py, footprint=1, strict=True)
-    for i in range(4):
-        place_near(PlayerId.FIVE, ENEMY_ORC_ARCHER_ID, 131 + i, 66, max_radius=3)
-        place_near(PlayerId.FIVE, ENEMY_ORC_ARCHER_ID, 155 + i, 66, max_radius=3)
 
     # P6 siege workshops & machines in the northern and eastern forecourts (outside Gondolin's walls)
     grid.place_unit_safe(um, PlayerId.SIX, SIEGE_WORKSHOP_ID, 61, 129, footprint=4, respect_roads=False, strict=True)
