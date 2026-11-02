@@ -7,7 +7,7 @@ from typing import Any
 from AoE2ScenarioParser.datasets.players import PlayerId
 
 MAP_SIZE: int = 240
-DEBUG_CHAT: bool = False
+DEBUG_CHAT: bool = True
 
 # Genie Engine Resource IDs
 RES_FOOD: int = 0

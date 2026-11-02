@@ -1080,8 +1080,6 @@ def build_map_and_entities(scenario: Any) -> dict[str, Any]:
     # P5 Northern siege forecourt (north of the perimeter gap, Y=125..131) + Morgoth siege props
     grid.place_unit_safe(um, PlayerId.FIVE, BARRACKS_ID, 52, 127, footprint=3, respect_roads=False, strict=True)
     grid.place_unit_safe(um, PlayerId.FIVE, ARCHERY_RANGE_ID, 70, 127, footprint=3, respect_roads=False, strict=True)
-    for i in range(8):
-        place_near(PlayerId.FIVE, ENEMY_ORC_INFANTRY_ID, 55 + (i % 4), 126 + (i // 4), max_radius=3)
     for prop_id, px, py in [
         (ARMY_TENT_A_ID, 48, 130), (ARMY_TENT_B_ID, 74, 130), (FLAME_EFFECT_ID, 56, 124),
         (FLAME_EFFECT_ID, 66, 124), (FORTIFIED_PALISADE_ID, 50, 124), (FORTIFIED_PALISADE_ID, 72, 124),
@@ -1094,10 +1092,6 @@ def build_map_and_entities(scenario: Any) -> dict[str, Any]:
     # P6 siege workshops & machines in the northern and eastern forecourts (outside Gondolin's walls)
     grid.place_unit_safe(um, PlayerId.SIX, SIEGE_WORKSHOP_ID, 61, 129, footprint=4, respect_roads=False, strict=True)
     grid.place_unit_safe(um, PlayerId.SIX, SIEGE_WORKSHOP_ID, 117, 63, footprint=4, respect_roads=False, strict=True)
-    place_near(PlayerId.SIX, ENEMY_IRON_DRAGON_RAM_ID, 61, 125, max_radius=3)
-    place_near(PlayerId.SIX, ENEMY_FIRE_DRAKE_ID, 59, 125, max_radius=3)
-    place_near(PlayerId.SIX, ENEMY_HEAVY_SCORPION_ID, 63, 125, max_radius=3)
-    place_near(PlayerId.SIX, ENEMY_IRON_DRAGON_RAM_ID, 113, 63, max_radius=3)
     for prop_id, px, py in [(ARMY_TENT_A_ID, 114, 68), (ARMY_TENT_B_ID, 114, 58), (FLAME_EFFECT_ID, 112, 63)]:
         grid.place_unit_safe(um, PlayerId.GAIA, prop_id, px, py, footprint=1, strict=True)
 
@@ -1105,9 +1099,6 @@ def build_map_and_entities(scenario: Any) -> dict[str, Any]:
 
     # P8 Maeglin's traitor barracks inside the sealed Caragdur enclave (Corridor X=23..29 stays free)
     grid.place_unit_safe(um, PlayerId.EIGHT, BARRACKS_ID, 36, 41, footprint=3, respect_roads=True, strict=True)
-    for i in range(4):
-        place_near(PlayerId.EIGHT, ENEMY_MOLE_TRAITOR_ID, 21 + i, 42, max_radius=3)
-        place_near(PlayerId.EIGHT, ENEMY_MOLE_PIKE_ID, 87 + i, 74, max_radius=3)
 
     _populate_forests_and_borders(grid, um)
 

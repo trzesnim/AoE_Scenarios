@@ -216,6 +216,10 @@ def _setup_balance_sanctuary(tm: Any, ctx: dict[str, Any]) -> None:
             location_x=cx,
             location_y=cy,
         )
+        safe_call(
+            trig.new_effect.stop_object,
+            selected_object_ids=[king_ref],
+        )
         set_state_armed(trig, old, False)
         set_state_armed(trig, new, True)
         _switch_sanctuary_state_marker(trig, old, new)

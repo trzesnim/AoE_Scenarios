@@ -260,6 +260,19 @@ class EffAPI:
             )
         )
 
+    def stop_object(
+        self,
+        selected_object_ids: list[int] | None = None,
+        **kwargs: Any,
+    ) -> None:
+        self._t.effects.append(
+            EffRec(
+                "stop_object",
+                selected_object_ids=selected_object_ids,
+                **kwargs,
+            )
+        )
+
     def modify_resource(
         self,
         source_player: PlayerId = PlayerId.ONE,

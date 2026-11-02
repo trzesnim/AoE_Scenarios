@@ -188,6 +188,53 @@ def generate_scenario() -> None:
     assert_no_dead_or_projectile_ids_before_write(scenario)
     scenario.write_to_file(str(output_path))
     print(f"[OK] Wygenerowano scenariusz bezposrednio do folderu gry: {output_path.resolve()}")
+
+    # Fizyczna instalacja plikow Immobile AI w katalogu resources\_common\ai (zapobiega nadpisywaniu przez PromiDE w lobby)
+    ai_dir = Path(output_path).parent.parent / "ai"
+    try:
+        ai_dir.mkdir(parents=True, exist_ok=True)
+        (ai_dir / "Immobile AI.ai").write_text("", encoding="utf-8")
+        immobile_script = (
+            "(defrule ;villagers\n"
+            "    (true)\n"
+            "=>\n"
+            "    (set-strategic-number sn-maximum-food-drop-distance -2)\n"
+            "    (set-strategic-number sn-maximum-wood-drop-distance -2)\n"
+            "    (set-strategic-number sn-maximum-gold-drop-distance -2)\n"
+            "    (set-strategic-number sn-maximum-hunt-drop-distance -2)\n"
+            "    (set-strategic-number sn-maximum-stone-drop-distance -2)\n"
+            "    (set-strategic-number sn-food-gatherer-percentage 0)\n"
+            "    (set-strategic-number sn-wood-gatherer-percentage 0)\n"
+            "    (set-strategic-number sn-gold-gatherer-percentage 0)\n"
+            "    (set-strategic-number sn-stone-gatherer-percentage 0)\n"
+            "    (set-strategic-number sn-cap-civilian-explorers 0)\n"
+            "    (set-strategic-number sn-percent-civilian-explorers 0)\n"
+            "    (disable-self)\n"
+            ")\n"
+            "(defrule ;military\n"
+            "    (true)\n"
+            "=>\n"
+            "    (set-strategic-number sn-percent-enemy-sighted-response 100)\n"
+            "    (set-strategic-number sn-hits-before-alliance-change 25)\n"
+            "    (set-strategic-number sn-number-explore-groups 0)\n"
+            "    (set-strategic-number sn-percent-attack-soldiers 0)\n"
+            "    (set-strategic-number sn-task-ungrouped-soldiers 0)\n"
+            "    (set-strategic-number sn-number-attack-groups 0)\n"
+            "    (set-strategic-number sn-enemy-sighted-response-distance 0)\n"
+            "    (set-strategic-number sn-sentry-distance 0)\n"
+            "    (set-strategic-number sn-defense-distance 0)\n"
+            "    (set-strategic-number sn-minimum-town-size 1)\n"
+            "    (set-strategic-number sn-maximum-town-size 1)\n"
+            "    (set-strategic-number sn-total-number-explorers 0)\n"
+            "    (set-strategic-number sn-relic-return-distance 0)\n"
+            "    (disable-self)\n"
+            ")\n"
+        )
+        (ai_dir / "Immobile AI.per").write_text(immobile_script, encoding="utf-8")
+        print(f"[OK] Zainstalowano pliki Immobile AI w folderze gry: {ai_dir.resolve()}")
+    except Exception as ex:
+        print(f"[WARN] Nie udalo sie zainstalowac plikow Immobile AI w {ai_dir}: {ex}")
+
     inspect_and_validate_scenario(output_path, ctx=ctx)
 
 

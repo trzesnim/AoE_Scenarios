@@ -660,7 +660,7 @@ def _setup_t_init_and_unit_scaling(tm: Any, ctx: dict[str, Any]) -> None:
         enabled=True,
         looping=False,
     )
-    safe_call(t_init_techs.new_condition.timer, timer=1)
+    safe_call(t_init_techs.new_condition.timer, timer=3)
 
     all_combat_techs: list[int] = [
         TECH_FEUDAL_AGE,
@@ -781,7 +781,7 @@ def _setup_t_init_and_unit_scaling(tm: Any, ctx: dict[str, Any]) -> None:
         enabled=True,
         looping=False,
     )
-    safe_call(t_init_stats.new_condition.timer, timer=3)
+    safe_call(t_init_stats.new_condition.timer, timer=1)
 
     for p_id in HUMAN_PLAYERS:
         for u_id in PLAYER_MELEE_RETINUE + PLAYER_RANGED_RETINUE:
@@ -873,7 +873,7 @@ def _setup_t_init_and_unit_scaling(tm: Any, ctx: dict[str, Any]) -> None:
         enabled=True,
         looping=False,
     )
-    safe_call(t_init_stats.new_condition.timer, timer=3)
+    safe_call(t_init_stats.new_condition.timer, timer=1)
 
     for h_id, h_cfg in BALANCE["heroes"].items():
         p_id = h_cfg["player"]
@@ -954,7 +954,7 @@ def _setup_t_init_and_unit_scaling(tm: Any, ctx: dict[str, Any]) -> None:
         enabled=True,
         looping=False,
     )
-    safe_call(t_enemy_stats.new_condition.timer, timer=3)
+    safe_call(t_enemy_stats.new_condition.timer, timer=1)
     for ai_p in AI_PLAYERS:
         for e_id, e_cfg in BALANCE["enemies"].items():
             safe_call(
@@ -999,7 +999,7 @@ def _setup_t_init_and_unit_scaling(tm: Any, ctx: dict[str, Any]) -> None:
         enabled=True,
         looping=False,
     )
-    safe_call(t_init_stats.new_condition.timer, timer=3)
+    safe_call(t_init_stats.new_condition.timer, timer=1)
 
     for b_id, b_cfg in BALANCE["bosses"].items():
         atk_cls = (
@@ -1066,7 +1066,7 @@ def _setup_t_init_and_unit_scaling(tm: Any, ctx: dict[str, Any]) -> None:
         enabled=True,
         looping=False,
     )
-    safe_call(t_full_heal.new_condition.timer, timer=4)
+    safe_call(t_full_heal.new_condition.timer, timer=2)
     for heal_p in HUMAN_PLAYERS + AI_PLAYERS:
         safe_call(
             t_full_heal.new_effect.heal_object,
