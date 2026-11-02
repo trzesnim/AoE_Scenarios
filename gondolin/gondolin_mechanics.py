@@ -39,12 +39,13 @@ from gondolin_config import (
     ENEMY_RANGED_UNITS,
     ENEMY_WARG_RIDER_ID,
     FLARE_UNIT_ID,
+    HERO_DUILIN_ID,
     HERO_ECTHELION_ID,
     HERO_EGALMOTH_ID,
-    HERO_GLORFINDEL_ID,
     HERO_ROG_ID,
     HUMAN_PLAYERS,
     MAP_REVEALER_ID,
+    MAP_SIZE,
     OBJECT_TYPE_MILITARY,
     PRIMARY_RETINUE_UNIT_BY_PLAYER,
     RES_BONUS_POP_CAP,
@@ -110,10 +111,10 @@ PLAYER_RANGED_RETINUE: list[int] = [
     UNIT_TREE_SLINGER_ID,
 ]
 
-# Ranged class-3 heroes (200 Robin Hood & 172 Tamerlane; 428 Hrolf the Ganger is melee class 4)
+# Ranged class-3 heroes (200 Robin Hood & 642 Lord de Graville); Glorfindel (640 La Hire) is melee class 4
 HERO_RANGED_IDS: set[int] = {
     HERO_EGALMOTH_ID,
-    HERO_GLORFINDEL_ID,
+    HERO_DUILIN_ID,
 }
 
 
@@ -276,16 +277,19 @@ def add_enemy_combat_buff(
                     quantity=abs(hp_delta),
                 )
 
-        if atk_delta > 0:
+        if atk_delta != 0:
+            # Reversible attack scaling: ADD for harder steps, SUBTRACT for easier steps (Balance Sanctuary)
+            atk_op = Operation.ADD if atk_delta > 0 else Operation.SUBTRACT
+            atk_qty = abs(atk_delta)
             for m_id in ENEMY_MELEE_UNITS:
                 safe_call(
                     trig.new_effect.modify_attribute,
                     source_player=ai_p,
                     object_list_unit_id=m_id,
                     object_attributes=ATTR_ATTACK,
-                    operation=Operation.ADD,
+                    operation=atk_op,
                     armour_attack_class=ARMOR_CLASS_MELEE,
-                    armour_attack_quantity=atk_delta,
+                    armour_attack_quantity=atk_qty,
                 )
             for r_id in ENEMY_RANGED_UNITS:
                 safe_call(
@@ -293,9 +297,9 @@ def add_enemy_combat_buff(
                     source_player=ai_p,
                     object_list_unit_id=r_id,
                     object_attributes=ATTR_ATTACK,
-                    operation=Operation.ADD,
+                    operation=atk_op,
                     armour_attack_class=ARMOR_CLASS_PIERCE,
-                    armour_attack_quantity=atk_delta,
+                    armour_attack_quantity=atk_qty,
                 )
 
 
@@ -771,9 +775,9 @@ def _setup_t_init_and_unit_scaling(tm: Any, ctx: dict[str, Any]) -> None:
         for p_id in HUMAN_PLAYERS + AI_PLAYERS + [PlayerId.GAIA]:
             apply_unit_lore_name(t_init_techs, p_id, u_id)
 
-    # Trigger at 0:03: Apply Noldor Elite Retinue, Hero, and Boss stat mutations
+    # Trigger at 0:03 (1/4): Noldor Elite Retinue stats (HP, regen, armor, attack, range)
     t_init_stats = tm.add_trigger(
-        name="Init_03s_RPG_Unit_And_Hero_Stats",
+        name="Init_03s_Noldor_Retinue_Stats",
         enabled=True,
         looping=False,
     )
@@ -863,6 +867,14 @@ def _setup_t_init_and_unit_scaling(tm: Any, ctx: dict[str, Any]) -> None:
             quantity=240,
         )
 
+    # Trigger at 0:03 (2/4): the 9 Noldor Heroes (hero status, MaxHP, regen, attack, armor, speed, blast)
+    t_init_stats = tm.add_trigger(
+        name="Init_03s_Noldor_Hero_Stats",
+        enabled=True,
+        looping=False,
+    )
+    safe_call(t_init_stats.new_condition.timer, timer=3)
+
     for h_id, h_cfg in BALANCE["heroes"].items():
         p_id = h_cfg["player"]
         atk_class = ARMOR_CLASS_PIERCE if h_id in HERO_RANGED_IDS else ARMOR_CLASS_MELEE
@@ -936,74 +948,58 @@ def _setup_t_init_and_unit_scaling(tm: Any, ctx: dict[str, Any]) -> None:
                 quantity=h_cfg["blast"],
             )
 
+    # Trigger at 0:03 (3/4): full RPG stats for all 9 non-boss Morgoth unit types (HP, attack, melee/pierce armor)
+    t_enemy_stats = tm.add_trigger(
+        name="Init_03s_Morgoth_Enemy_Stats",
+        enabled=True,
+        looping=False,
+    )
+    safe_call(t_enemy_stats.new_condition.timer, timer=3)
     for ai_p in AI_PLAYERS:
-        safe_call(
-            t_init_stats.new_effect.modify_attribute,
-            source_player=ai_p,
-            object_list_unit_id=ENEMY_ORC_INFANTRY_ID,
-            object_attributes=ATTR_HIT_POINTS,
-            operation=Operation.SET,
-            quantity=95,
-        )
-        safe_call(
-            t_init_stats.new_effect.modify_attribute,
-            source_player=ai_p,
-            object_list_unit_id=ENEMY_ORC_INFANTRY_ID,
-            object_attributes=ATTR_ATTACK,
-            operation=Operation.SET,
-            armour_attack_class=ARMOR_CLASS_MELEE,
-            armour_attack_quantity=15,
-        )
-        safe_call(
-            t_init_stats.new_effect.modify_attribute,
-            source_player=ai_p,
-            object_list_unit_id=ENEMY_ORC_BRUTE_ID,
-            object_attributes=ATTR_HIT_POINTS,
-            operation=Operation.SET,
-            quantity=185,
-        )
-        safe_call(
-            t_init_stats.new_effect.modify_attribute,
-            source_player=ai_p,
-            object_list_unit_id=ENEMY_ORC_BRUTE_ID,
-            object_attributes=ATTR_ATTACK,
-            operation=Operation.SET,
-            armour_attack_class=ARMOR_CLASS_MELEE,
-            armour_attack_quantity=22,
-        )
-        for mole_id in (ENEMY_MOLE_TRAITOR_ID, ENEMY_MOLE_PIKE_ID):
+        for e_id, e_cfg in BALANCE["enemies"].items():
             safe_call(
-                t_init_stats.new_effect.modify_attribute,
+                t_enemy_stats.new_effect.modify_attribute,
                 source_player=ai_p,
-                object_list_unit_id=mole_id,
+                object_list_unit_id=e_id,
                 object_attributes=ATTR_HIT_POINTS,
                 operation=Operation.SET,
-                quantity=240,
+                quantity=e_cfg["hp"],
             )
             safe_call(
-                t_init_stats.new_effect.modify_attribute,
+                t_enemy_stats.new_effect.modify_attribute,
                 source_player=ai_p,
-                object_list_unit_id=mole_id,
+                object_list_unit_id=e_id,
                 object_attributes=ATTR_ATTACK,
                 operation=Operation.SET,
-                armour_attack_class=ARMOR_CLASS_MELEE,
-                armour_attack_quantity=26,
+                armour_attack_class=e_cfg["atk_class"],
+                armour_attack_quantity=e_cfg["atk"],
             )
-        for aux_id, aux_hp in (
-            (ENEMY_ORC_ARCHER_ID, 75),
-            (ENEMY_ORC_CROSSBOW_ID, 95),
-            (ENEMY_DIRE_WOLF_ID, 110),
-            (ENEMY_WARG_RIDER_ID, 180),
-            (ENEMY_HEAVY_SCORPION_ID, 140),
-        ):
             safe_call(
-                t_init_stats.new_effect.modify_attribute,
+                t_enemy_stats.new_effect.modify_attribute,
                 source_player=ai_p,
-                object_list_unit_id=aux_id,
-                object_attributes=ATTR_HIT_POINTS,
+                object_list_unit_id=e_id,
+                object_attributes=ATTR_ARMOR,
                 operation=Operation.SET,
-                quantity=aux_hp,
+                armour_attack_class=ARMOR_CLASS_MELEE,
+                armour_attack_quantity=e_cfg["melee_armor"],
             )
+            safe_call(
+                t_enemy_stats.new_effect.modify_attribute,
+                source_player=ai_p,
+                object_list_unit_id=e_id,
+                object_attributes=ATTR_ARMOR,
+                operation=Operation.SET,
+                armour_attack_class=ARMOR_CLASS_PIERCE,
+                armour_attack_quantity=e_cfg["pierce_armor"],
+            )
+
+    # Trigger at 0:03 (4/4): Morgoth bosses and siege machines (Maeglin, Gothmog, Balrog, Iron Dragon, Uruloki)
+    t_init_stats = tm.add_trigger(
+        name="Init_03s_Morgoth_Boss_Stats",
+        enabled=True,
+        looping=False,
+    )
+    safe_call(t_init_stats.new_condition.timer, timer=3)
 
     for b_id, b_cfg in BALANCE["bosses"].items():
         atk_cls = (
@@ -1062,6 +1058,64 @@ def _setup_t_init_and_unit_scaling(tm: Any, ctx: dict[str, Any]) -> None:
                     operation=Operation.SET,
                     quantity=1.4 if b_id == ENEMY_GOTHMOG_ID else 1.0,
                 )
+
+    # Trigger at 0:04: SET on ATTR_HIT_POINTS raises MaxHP but NOT the current HP, so every pre-placed unit would stay
+    # at its old (tiny) HP (e.g. Idril 35/1150). A full-map heal (clamped to MaxHP) restores 100% health at game start.
+    t_full_heal = tm.add_trigger(
+        name="Init_04s_Full_Heal_After_MaxHP",
+        enabled=True,
+        looping=False,
+    )
+    safe_call(t_full_heal.new_condition.timer, timer=4)
+    for heal_p in HUMAN_PLAYERS + AI_PLAYERS:
+        safe_call(
+            t_full_heal.new_effect.heal_object,
+            source_player=heal_p,
+            object_type=OBJECT_TYPE_MILITARY,
+            area_x1=0,
+            area_y1=0,
+            area_x2=MAP_SIZE - 1,
+            area_y2=MAP_SIZE - 1,
+            quantity=BALANCE["init_full_heal_hp"],
+        )
+    for h_id, h_cfg in BALANCE["heroes"].items():
+        safe_call(
+            t_full_heal.new_effect.heal_object,
+            source_player=h_cfg["player"],
+            object_list_unit_id=h_id,
+            area_x1=0,
+            area_y1=0,
+            area_x2=MAP_SIZE - 1,
+            area_y2=MAP_SIZE - 1,
+            quantity=BALANCE["init_full_heal_hp"],
+        )
+
+    # Calm opening [0:00, 0:50): briefing at 0:02, scouts' warning at 0:30 (Maeglin's revolt 0:50, siege assault 1:05)
+    t_intro = tm.add_trigger(
+        name="Intro_02s_Noldor_Briefing",
+        enabled=True,
+        looping=False,
+    )
+    safe_call(t_intro.new_condition.timer, timer=2)
+    add_chat_and_flare(
+        t_intro,
+        "<BLUE>[Gondolin] Mury trzymaja jeszcze przez chwile. Macie 50 sekund na ustawienie szyku, "
+        "odwiedzenie Sanktuarium Balansu i zebranie sil przed zdrada Maeglina!",
+    )
+
+    t_scout_warning = tm.add_trigger(
+        name="Warning_30s_Scouts_Report_Siege",
+        enabled=True,
+        looping=False,
+    )
+    safe_call(t_scout_warning.new_condition.timer, timer=30)
+    add_chat_and_flare(
+        t_scout_warning,
+        "<ORANGE>[Zwiadowcy] Orkowie i Zelazne Smoki Morgotha gromadza sie przed Murami Polnocnymi i Wschodnimi! "
+        "Za 20 sekund Dom Kreta podniesie bunt w Caragdur!",
+        61,
+        106,
+    )
 
 
 def _setup_special_auras_and_hazards(tm: Any, ctx: dict[str, Any]) -> None:
@@ -1221,7 +1275,7 @@ def _setup_iron_dragon_corridor_spawners(tm: Any, ctx: dict[str, Any]) -> None:
         enabled=True,
         looping=False,
     )
-    safe_call(t_spawn_dragons.new_condition.timer, timer=15)
+    safe_call(t_spawn_dragons.new_condition.timer, timer=65)  # 1:05 main siege assault (calm opening until then)
 
     dragon_spawns: list[tuple[int, int, int, int, int]] = [
         (ENEMY_IRON_DRAGON_RAM_ID, 61, 108, 61, 78),
@@ -1251,6 +1305,27 @@ def _setup_iron_dragon_corridor_spawners(tm: Any, ctx: dict[str, Any]) -> None:
         )
     apply_unit_lore_name(t_spawn_dragons, PlayerId.SIX, ENEMY_IRON_DRAGON_RAM_ID)
     apply_unit_lore_name(t_spawn_dragons, PlayerId.SIX, ENEMY_FIRE_DRAKE_ID)
+
+    # At 1:05 the pre-placed siege camps (parked outside the walls since 0:00) march on Gondolin as well
+    pre_placed_camps: list[tuple[PlayerId, int, tuple[int, int, int, int], tuple[int, int]]] = [
+        (PlayerId.FIVE, ENEMY_ORC_INFANTRY_ID, (50, 123, 74, 132), (61, 78)),
+        (PlayerId.SIX, ENEMY_IRON_DRAGON_RAM_ID, (50, 123, 74, 132), (61, 78)),
+        (PlayerId.SIX, ENEMY_FIRE_DRAKE_ID, (50, 123, 74, 132), (61, 78)),
+        (PlayerId.SIX, ENEMY_HEAVY_SCORPION_ID, (50, 123, 74, 132), (61, 78)),
+        (PlayerId.SIX, ENEMY_IRON_DRAGON_RAM_ID, (110, 58, 120, 68), (76, 63)),
+    ]
+    for camp_p, camp_u, (cax1, cay1, cax2, cay2), (ctx_x, ctx_y) in pre_placed_camps:
+        safe_call(
+            t_spawn_dragons.new_effect.attack_move,
+            source_player=camp_p,
+            object_list_unit_id=camp_u,
+            area_x1=cax1,
+            area_y1=cay1,
+            area_x2=cax2,
+            area_y2=cay2,
+            location_x=ctx_x,
+            location_y=ctx_y,
+        )
 
     add_chat_and_flare(
         t_spawn_dragons,

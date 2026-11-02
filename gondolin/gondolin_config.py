@@ -317,6 +317,7 @@ BALANCE: dict[str, Any] = {
     "seal_rally_heal_Step_hp": 35,        # +35 HP healed every 2s inside the active phase checkpoint aura
     "out_of_combat_regen_per_min": 30,    # 0.5 HP/s passive recovery for Noldor units
     "hero_regen_per_min": 120,            # 2.0 HP/s regeneration for Heroes
+    "init_full_heal_hp": 5000,            # 0:04 full-map heal (clamped to MaxHP) after the 0:03 MaxHP mutations
     "fountain_local_heal_hp": 30,         # +30 HP healed every 4s for military units inside Royal Fountain
     "soft_cap_critical_threshold": 15,    # 0..14 military units -> Critical Rescue Pack
     "soft_cap_dominance_threshold": 28,   # 15..28 -> Standard Pack; >= 29 military units -> Dominance Bonus

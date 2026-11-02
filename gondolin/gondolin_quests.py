@@ -64,9 +64,19 @@ from gondolin_mechanics import (
 
 # Isolated NW border coordinates for Phase Marker Torches (outside playable area, non-military object)
 PHASE_MARKER_COORDS: dict[str, tuple[int, int]] = {
-    "phase1": (2, 222),
-    "phase2": (2, 228),
-    "phase3": (2, 234),
+    "phase1": (2, 196),
+    "phase2": (2, 202),
+    "phase3": (2, 208),
+}
+
+# Balance Sanctuary level markers (-2..+2): one non-military Torch moved along the isolated NW strip (>20 tiles from
+# the chamber revealers, so it stays hidden in Fog of War). Used to defer the -500/-1000 Glory penalty to Victory.
+SANCTUARY_STATE_COORDS: dict[int, tuple[int, int]] = {
+    -2: (2, 170),
+    -1: (2, 174),
+    0: (2, 178),
+    1: (2, 182),
+    2: (2, 186),
 }
 
 PHASE_RALLY_AURA_BOXES: dict[str, tuple[int, int, int, int]] = {
@@ -98,222 +108,187 @@ def _switch_phase_marker(trig: Any, old_phase: str, new_phase: str) -> None:
     )
 
 
+def _sanctuary_level_tag(level: int) -> str:
+    """Return a compact trigger-name tag for a Sanctuary level (m2, m1, 0, p1, p2)."""
+    if level == 0:
+        return "0"
+    return f"p{level}" if level > 0 else f"m{-level}"
+
+
+def _switch_sanctuary_state_marker(trig: Any, old_level: int, new_level: int) -> None:
+    """Move the Sanctuary state Torch (non-military) from old_level to new_level in the isolated NW strip."""
+    ox, oy = SANCTUARY_STATE_COORDS[old_level]
+    nx, ny = SANCTUARY_STATE_COORDS[new_level]
+    safe_call(
+        trig.new_effect.remove_object,
+        source_player=PlayerId.ONE,
+        object_list_unit_id=TORCH_ID,
+        area_x1=ox - 1,
+        area_y1=oy - 1,
+        area_x2=ox + 1,
+        area_y2=oy + 1,
+    )
+    safe_call(
+        trig.new_effect.create_object,
+        source_player=PlayerId.ONE,
+        object_list_unit_id=TORCH_ID,
+        location_x=nx,
+        location_y=ny,
+    )
+
+
 def _setup_balance_sanctuary(tm: Any, ctx: dict[str, Any]) -> None:
-    """Configure the 5-level Balance Sanctuary (-2 to +2) with mutual lockouts and terminal +/-2 states."""
+    """Bidirectional 5-level Balance Sanctuary (-2 <-> -1 <-> 0 <-> +1 <-> +2); the King is never removed.
+
+    Screen UP (harder_area) raises difficulty, screen DOWN (easier_area) lowers it. Every step teleports the King
+    back to the chamber centre, so the player can keep adjusting in either direction until a boundary (+2 / -2).
+    Positive levels move Glory (Gold) symmetrically (never below 0). Negative levels are only tracked by the state
+    Torch; their -500 / -1000 Glory penalty is applied once at Victory (Gold clamps at 0, so per-step penalties could
+    be farmed by stepping back and forth).
+    """
     sanc = ctx["sanctuary"]
-    x1, y1, x2, y2 = sanc["x1"], sanc["y1"], sanc["x2"], sanc["y2"]
     cx, cy = sanc["cx"], sanc["cy"]
-    hx1, hy1, hx2, hy2 = sanc["harder_area"]
-    ex1, ey1, ex2, ey2 = sanc["easier_area"]
+    king_ref = sanc["king_ref_id"]
+    areas: dict[str, tuple[int, int, int, int]] = {
+        "up": sanc["harder_area"],
+        "down": sanc["easier_area"],
+    }
+    glory = BALANCE["glory_scores"]
+    hard_hp, hard_atk = BALANCE["sanctuary_harder_hp_add"], BALANCE["sanctuary_harder_atk_add"]
+    easy_hp, easy_atk = BALANCE["sanctuary_easier_hp_sub"], BALANCE["sanctuary_easier_atk_sub"]
+    levels = (-2, -1, 0, 1, 2)
 
-    # Relays to respawn the Sanctuary King in the center ONLY after Step 1 (+1 or -1).
-    # After Step 2 (+2 or -2), the King is removed permanently so no further triggers can fire.
-    t_relay_h1 = tm.add_trigger(
-        name="Sanctuary_Relay2s_Harder1",
-        enabled=False,
-        looping=False,
-    )
-    safe_call(t_relay_h1.new_condition.timer, timer=2)
-    safe_call(
-        t_relay_h1.new_effect.create_object,
-        source_player=PlayerId.ONE,
-        object_list_unit_id=SANCTUARY_KING_ID,
-        location_x=cx,
-        location_y=cy,
-    )
-    apply_unit_lore_name(t_relay_h1, PlayerId.ONE, SANCTUARY_KING_ID)
-
-    t_relay_e1 = tm.add_trigger(
-        name="Sanctuary_Relay2s_Easier1",
-        enabled=False,
-        looping=False,
-    )
-    safe_call(t_relay_e1.new_condition.timer, timer=2)
-    safe_call(
-        t_relay_e1.new_effect.create_object,
-        source_player=PlayerId.ONE,
-        object_list_unit_id=SANCTUARY_KING_ID,
-        location_x=cx,
-        location_y=cy,
-    )
-    apply_unit_lore_name(t_relay_e1, PlayerId.ONE, SANCTUARY_KING_ID)
-
-    t_hard_1 = tm.add_trigger(
-        name="Sanctuary_Harder_Step1",
+    t_init_torch = tm.add_trigger(
+        name="Sanctuary_Init_State_Torch",
         enabled=True,
         looping=False,
     )
-    t_hard_2 = tm.add_trigger(
-        name="Sanctuary_Harder_Step2",
-        enabled=False,
-        looping=False,
-    )
-    t_easy_1 = tm.add_trigger(
-        name="Sanctuary_Easier_Step1",
-        enabled=True,
-        looping=False,
-    )
-    t_easy_2 = tm.add_trigger(
-        name="Sanctuary_Easier_Step2",
-        enabled=False,
-        looping=False,
+    safe_call(t_init_torch.new_condition.timer, timer=1)
+    sx0, sy0 = SANCTUARY_STATE_COORDS[0]
+    safe_call(
+        t_init_torch.new_effect.create_object,
+        source_player=PlayerId.ONE,
+        object_list_unit_id=TORCH_ID,
+        location_x=sx0,
+        location_y=sy0,
     )
 
-    # Harder Step 1 (+1: +1000 Glory)
-    safe_call(
-        t_hard_1.new_condition.objects_in_area,
-        source_player=PlayerId.ONE,
-        object_list=SANCTUARY_KING_ID,
-        area_x1=hx1,
-        area_y1=hy1,
-        area_x2=hx2,
-        area_y2=hy2,
-        quantity=1,
-    )
-    safe_call(
-        t_hard_1.new_effect.remove_object,
-        source_player=PlayerId.ONE,
-        object_list_unit_id=SANCTUARY_KING_ID,
-        area_x1=x1,
-        area_y1=y1,
-        area_x2=x2,
-        area_y2=y2,
-    )
-    safe_call(
-        t_hard_1.new_effect.deactivate_trigger,
-        trigger_id=t_easy_1.trigger_id,
-    )
-    add_enemy_combat_buff(
-        t_hard_1,
-        hp_delta=BALANCE["sanctuary_harder_hp_add"],
-        atk_delta=BALANCE["sanctuary_harder_atk_add"],
-    )
-    award_glory_gold(
-        t_hard_1,
-        BALANCE["glory_scores"]["difficulty_plus_1"],
-        "<RED>[Sanktuarium Balansu +1] Sily Morgotha wzmocnione (+20 HP, +2 Ataku)! Premia: +1000 Chwaly!",
-    )
-    safe_call(
-        t_hard_1.new_effect.activate_trigger,
-        trigger_id=t_relay_h1.trigger_id,
-    )
-    safe_call(
-        t_relay_h1.new_effect.activate_trigger,
-        trigger_id=t_hard_2.trigger_id,
-    )
+    step_up: dict[int, Any] = {}
+    step_down: dict[int, Any] = {}
+    for lvl in levels:
+        tag = _sanctuary_level_tag(lvl)
+        if lvl < 2:
+            step_up[lvl] = tm.add_trigger(
+                name=f"Sanctuary_L{tag}_StepUp_Harder", enabled=(lvl == 0), looping=False
+            )
+        if lvl > -2:
+            step_down[lvl] = tm.add_trigger(
+                name=f"Sanctuary_L{tag}_StepDown_Easier", enabled=(lvl == 0), looping=False
+            )
 
-    # Harder Step 2 (+2: terminal state, total +2000 Glory from difficulty_plus_2)
-    plus_2_delta = (
-        BALANCE["glory_scores"]["difficulty_plus_2"]
-        - BALANCE["glory_scores"]["difficulty_plus_1"]
-    )
-    safe_call(
-        t_hard_2.new_condition.objects_in_area,
-        source_player=PlayerId.ONE,
-        object_list=SANCTUARY_KING_ID,
-        area_x1=hx1,
-        area_y1=hy1,
-        area_x2=hx2,
-        area_y2=hy2,
-        quantity=1,
-    )
-    safe_call(
-        t_hard_2.new_effect.remove_object,
-        source_player=PlayerId.ONE,
-        object_list_unit_id=SANCTUARY_KING_ID,
-        area_x1=x1,
-        area_y1=y1,
-        area_x2=x2,
-        area_y2=y2,
-    )
-    add_enemy_combat_buff(
-        t_hard_2,
-        hp_delta=BALANCE["sanctuary_harder_hp_add"],
-        atk_delta=BALANCE["sanctuary_harder_atk_add"],
-    )
-    award_glory_gold(
-        t_hard_2,
-        plus_2_delta,
-        "<RED>[Sanktuarium Balansu +2 (Maksimum)] Sily Morgotha ponownie wzmocnione (lacznie +40 HP, +4 Ataku, +2000 Chwaly)! Sanktuarium zamkniete.",
-    )
+    def set_state_armed(trig: Any, level: int, armed: bool) -> None:
+        for table in (step_up, step_down):
+            if level in table:
+                safe_call(
+                    trig.new_effect.activate_trigger if armed else trig.new_effect.deactivate_trigger,
+                    trigger_id=table[level].trigger_id,
+                )
 
-    # Easier Step 1 (-1: -500 Glory)
-    safe_call(
-        t_easy_1.new_condition.objects_in_area,
-        source_player=PlayerId.ONE,
-        object_list=SANCTUARY_KING_ID,
-        area_x1=ex1,
-        area_y1=ey1,
-        area_x2=ex2,
-        area_y2=ey2,
-        quantity=1,
-    )
-    safe_call(
-        t_easy_1.new_effect.remove_object,
-        source_player=PlayerId.ONE,
-        object_list_unit_id=SANCTUARY_KING_ID,
-        area_x1=x1,
-        area_y1=y1,
-        area_x2=x2,
-        area_y2=y2,
-    )
-    safe_call(
-        t_easy_1.new_effect.deactivate_trigger,
-        trigger_id=t_hard_1.trigger_id,
-    )
-    add_enemy_combat_buff(
-        t_easy_1,
-        hp_delta=-BALANCE["sanctuary_easier_hp_sub"],
-        atk_delta=0,
-    )
-    award_glory_gold(
-        t_easy_1,
-        BALANCE["glory_scores"]["difficulty_minus_1"],
-        "<GREEN>[Sanktuarium Balansu -1] Pancerze wroga oslabione (-10 HP)! Koszt: -500 Chwaly.",
-    )
-    safe_call(
-        t_easy_1.new_effect.activate_trigger,
-        trigger_id=t_relay_e1.trigger_id,
-    )
-    safe_call(
-        t_relay_e1.new_effect.activate_trigger,
-        trigger_id=t_easy_2.trigger_id,
-    )
+    def wire_step(trig: Any, old: int, direction: str) -> None:
+        new = old + 1 if direction == "up" else old - 1
+        ax1, ay1, ax2, ay2 = areas[direction]
+        # Timer >= 1 doubles as a 1 s debounce after (re)arming and satisfies the loop/timer validator.
+        safe_call(trig.new_condition.timer, timer=1)
+        safe_call(
+            trig.new_condition.objects_in_area,
+            source_player=PlayerId.ONE,
+            object_list=SANCTUARY_KING_ID,
+            area_x1=ax1,
+            area_y1=ay1,
+            area_x2=ax2,
+            area_y2=ay2,
+            quantity=1,
+        )
+        # The King is teleported back to the centre (never removed) so the next step can start immediately.
+        safe_call(
+            trig.new_effect.teleport_object,
+            selected_object_ids=[king_ref],
+            location_x=cx,
+            location_y=cy,
+        )
+        set_state_armed(trig, old, False)
+        set_state_armed(trig, new, True)
+        _switch_sanctuary_state_marker(trig, old, new)
 
-    # Easier Step 2 (-2: terminal state, total -1000 Glory from difficulty_minus_2)
-    minus_2_delta = (
-        BALANCE["glory_scores"]["difficulty_minus_2"]
-        - BALANCE["glory_scores"]["difficulty_minus_1"]
-    )
-    safe_call(
-        t_easy_2.new_condition.objects_in_area,
-        source_player=PlayerId.ONE,
-        object_list=SANCTUARY_KING_ID,
-        area_x1=ex1,
-        area_y1=ey1,
-        area_x2=ex2,
-        area_y2=ey2,
-        quantity=1,
-    )
-    safe_call(
-        t_easy_2.new_effect.remove_object,
-        source_player=PlayerId.ONE,
-        object_list_unit_id=SANCTUARY_KING_ID,
-        area_x1=x1,
-        area_y1=y1,
-        area_x2=x2,
-        area_y2=y2,
-    )
-    add_enemy_combat_buff(
-        t_easy_2,
-        hp_delta=-BALANCE["sanctuary_easier_hp_sub"],
-        atk_delta=0,
-    )
-    award_glory_gold(
-        t_easy_2,
-        minus_2_delta,
-        "<GREEN>[Sanktuarium Balansu -2 (Minimum)] Pancerze wroga ponownie oslabione (lacznie -20 HP, -1000 Chwaly). Sanktuarium zamkniete.",
-    )
+        if direction == "up":
+            if old >= 0:  # genuinely harder: +HP, +ATK for Morgoth, +Glory
+                hp_delta, atk_delta = hard_hp, hard_atk
+                points = glory["difficulty_plus_1"] if new == 1 else glory["difficulty_plus_2"] - glory["difficulty_plus_1"]
+                text = (
+                    f"<RED>[Sanktuarium Balansu {new:+d}] Sily Morgotha wzmocnione (+{hard_hp} HP, +{hard_atk} Ataku)! "
+                    f"Premia: +{points} Chwaly!"
+                )
+            else:  # undo one easier step
+                hp_delta, atk_delta, points = easy_hp, easy_atk, 0
+                text = (
+                    f"<ORANGE>[Sanktuarium Balansu {new:+d}] Oslabienie wroga czesciowo cofniete "
+                    f"(+{easy_hp} HP, +{easy_atk} Ataku)."
+                )
+        else:
+            if old > 0:  # undo one harder step
+                hp_delta, atk_delta = -hard_hp, -hard_atk
+                points = -(
+                    glory["difficulty_plus_1"] if old == 1 else glory["difficulty_plus_2"] - glory["difficulty_plus_1"]
+                )
+                text = (
+                    f"<GREEN>[Sanktuarium Balansu {new:+d}] Wzmocnienie wroga cofniete "
+                    f"(-{hard_hp} HP, -{hard_atk} Ataku, {points} Chwaly)."
+                )
+            else:  # genuinely easier: -HP, -ATK for Morgoth, penalty deferred to Victory
+                hp_delta, atk_delta, points = -easy_hp, -easy_atk, 0
+                text = (
+                    f"<GREEN>[Sanktuarium Balansu {new:+d}] Wrogowie oslabieni (-{easy_hp} HP, -{easy_atk} Ataku). "
+                    "Koszt Chwaly zostanie naliczony przy zwyciestwie."
+                )
+        add_enemy_combat_buff(trig, hp_delta=hp_delta, atk_delta=atk_delta)
+        if points != 0:
+            award_glory_gold(trig, points, text)
+        else:
+            add_chat_and_flare(trig, text)
+
+    for lvl, trig in step_up.items():
+        wire_step(trig, lvl, "up")
+    for lvl, trig in step_down.items():
+        wire_step(trig, lvl, "down")
+
+    # Deferred negative-level Glory penalties: armed by Victory_Reached_Vale_Of_Sirion (see phase III)
+    penalty_triggers: list[Any] = []
+    for lvl in (-1, -2):
+        t_pen = tm.add_trigger(
+            name=f"Sanctuary_Victory_Penalty_L{_sanctuary_level_tag(lvl)}",
+            enabled=False,
+            looping=False,
+        )
+        px, py = SANCTUARY_STATE_COORDS[lvl]
+        safe_call(t_pen.new_condition.timer, timer=1)
+        safe_call(
+            t_pen.new_condition.objects_in_area,
+            source_player=PlayerId.ONE,
+            object_list=TORCH_ID,
+            area_x1=px - 1,
+            area_y1=py - 1,
+            area_x2=px + 1,
+            area_y2=py + 1,
+            quantity=1,
+        )
+        award_glory_gold(
+            t_pen,
+            glory["difficulty_minus_1"] if lvl == -1 else glory["difficulty_minus_2"],
+            f"<GREEN>[Sanktuarium Balansu {lvl:+d}] Koszt ulatwienia rozgrywki: "
+            f"{glory['difficulty_minus_1'] if lvl == -1 else glory['difficulty_minus_2']} Chwaly.",
+        )
+        penalty_triggers.append(t_pen)
+    ctx["_sanctuary_penalty_triggers"] = penalty_triggers
 
 
 def _setup_three_seals_of_turgon(tm: Any, ctx: dict[str, Any]) -> dict[str, Any]:
@@ -740,29 +715,42 @@ def _setup_phase1_city_and_dilemmas(tm: Any, ctx: dict[str, Any]) -> list[Any]:
     )
 
     # Q1 [Co-op P1 + P4]: Betrayal of Maeglin at Caragdur
+    # 0:50 revolt (calm opening [0:00, 0:50) first): Maeglin + 6 traitors appear INSIDE the Caragdur enclave south of
+    # the P4 monastery (never inside a building) and march on the Court of Tuor together with the 4 pre-placed traitors.
     t_spawn_maeglin = tm.add_trigger(
         name="P1_Spawn_Maeglin_Traitors",
         enabled=True,
         looping=False,
     )
-    safe_call(t_spawn_maeglin.new_condition.timer, timer=10)
+    safe_call(t_spawn_maeglin.new_condition.timer, timer=50)
     safe_call(
         t_spawn_maeglin.new_effect.create_object,
         source_player=PlayerId.EIGHT,
         object_list_unit_id=ENEMY_MAEGLIN_ID,
-        location_x=20,
+        location_x=22,
         location_y=38,
     )
-    for i in range(8):
+    for i in range(6):
         safe_call(
             t_spawn_maeglin.new_effect.create_object,
             source_player=PlayerId.EIGHT,
             object_list_unit_id=ENEMY_MOLE_TRAITOR_ID if i % 2 == 0 else ENEMY_MOLE_PIKE_ID,
-            location_x=20 + (i % 4),
-            location_y=34 + (i // 4),
+            location_x=20 + (i % 3),
+            location_y=39 + (i // 3),
         )
     for m_id in (ENEMY_MAEGLIN_ID, ENEMY_MOLE_TRAITOR_ID, ENEMY_MOLE_PIKE_ID):
         apply_unit_lore_name(t_spawn_maeglin, PlayerId.EIGHT, m_id)
+        safe_call(
+            t_spawn_maeglin.new_effect.attack_move,
+            source_player=PlayerId.EIGHT,
+            object_list_unit_id=m_id,
+            area_x1=17,
+            area_y1=36,
+            area_x2=30,
+            area_y2=43,
+            location_x=27,
+            location_y=27,
+        )
     add_chat_and_flare(
         t_spawn_maeglin,
         "<PURPLE>[Zdrada Domu Kreta!] Maeglin (P8) zamknal bramy Caragdur i uderza na Dwor Tuora, by porwac Idril oraz Earendila! P1 musi uderzyc z odsieczą od poludnia!",
@@ -1966,6 +1954,21 @@ def _setup_phase3_orfalch_and_cirith_victory(
         area_y2=sy2,
         quantity=1,
     )
+    t_victory_final = tm.add_trigger(
+        name="Victory_Declare_Final",
+        enabled=False,
+        looping=False,
+    )
+    safe_call(t_victory_final.new_condition.timer, timer=3)
+    safe_call(
+        t_victory.new_effect.activate_trigger,
+        trigger_id=t_victory_final.trigger_id,
+    )
+    for t_pen in ctx["_sanctuary_penalty_triggers"]:
+        safe_call(
+            t_victory.new_effect.activate_trigger,
+            trigger_id=t_pen.trigger_id,
+        )
     award_glory_gold(
         t_victory,
         3 * BALANCE["glory_scores"]["seal_preserved_bonus"],
@@ -1973,7 +1976,7 @@ def _setup_phase3_orfalch_and_cirith_victory(
     )
     for p_id in HUMAN_PLAYERS:
         safe_call(
-            t_victory.new_effect.declare_victory,
+            t_victory_final.new_effect.declare_victory,
             source_player=p_id,
             enabled=True,
         )

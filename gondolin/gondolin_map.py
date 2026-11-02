@@ -1064,7 +1064,7 @@ def build_map_and_entities(scenario: Any) -> dict[str, Any]:
 
     # Balance Sanctuary: King in the centre of the compact chamber + 3 Map Revealers lighting 100% of it
     # (UP = harder, DOWN = easier on the isometric screen; revealers stay >20 tiles from NW state torches)
-    grid.place_unit_safe(um, PlayerId.ONE, SANCTUARY_KING_ID, 12, 227, footprint=1, strict=True)
+    sanctuary_king = grid.place_unit_safe(um, PlayerId.ONE, SANCTUARY_KING_ID, 12, 227, footprint=1, strict=True)
     for rev_y in (224, 227, 230):
         grid.place_unit_safe(um, PlayerId.ONE, MAP_REVEALER_ID, 12, rev_y, footprint=1, allow_overlap=True)
     grid.place_unit_safe(um, PlayerId.ONE, MAP_REVEALER_ID, 61, 63, footprint=1, allow_overlap=True)
@@ -1123,6 +1123,7 @@ def build_map_and_entities(scenario: Any) -> dict[str, Any]:
         "sanctuary": {
             "x1": 9, "y1": 223, "x2": 15, "y2": 231, "cx": 12, "cy": 227,
             "harder_area": (9, 223, 15, 225), "easier_area": (9, 229, 15, 231),
+            "king_ref_id": sanctuary_king.reference_id,
         },
         "checkpoints": {
             "phase1": {PlayerId.ONE: (61, 49), PlayerId.TWO: (66, 56), PlayerId.THREE: (61, 66), PlayerId.FOUR: (55, 56)},
