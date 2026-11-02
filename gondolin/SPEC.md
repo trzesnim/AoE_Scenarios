@@ -424,41 +424,48 @@ W scenariuszu uczestniczy **8 aktywnych graczy** (`active_players = 8`) oraz neu
 
 
 
-#### Region 5: Sanktuarium Balansu i Pas Fazowy (`X = 1..20, Y = 220..236`)
+#### Region 5: Sanktuarium Balansu i Pas Fazowy (`X = 1..20, Y = 170..236`)
 
-* Zamknięta skałami komora w narożniku NW (`X = 4..20, Y = 220..236`) z Królem `SANCTUARY_KING_ID (434)` na `(12, 228)` oraz polami wyboru trudności: `harder_area (8, 232, 16, 235)` i `easier_area (8, 221, 16, 224)`.
+* **Zwarta komora Sanktuarium Balansu (`X = 8..16, Y = 222..232`):** całkowicie odsłonięta i wolna od mgły wojny dzięki trzem `MAP_REVEALER_ID` na `(12, 224)`, `(12, 227)`, `(12, 230)`. Otoczona niezniszczalnymi skałami `ROCK_CLIFF_ID`. Król P1 (`SANCTUARY_KING_ID = 434`) stoi pośrodku na `(12, 227)`.
+* **Kierunki wyboru trudności:**
+  * **Krok w GÓRĘ ekranu (ku pochodniom na `9, 223` i `15, 223`):** strefa `harder_area (9, 223, 15, 225)` — podnosi poziom trudności (+1 / +2), wzmacniając siły Morgotha i przyznając premię `+500` / `+1000 Chwały`.
+  * **Krok w DÓŁ ekranu (ku chorągwiom na `9, 231` i `15, 231`):** strefa `easier_area (9, 229, 15, 231)` — obniża poziom trudności (-1 / -2), osłabiając wrogów kosztem kary `-500` / `-1000 Chwały` (odroczonej do epilogu zwycięstwa).
+  * **Automatyczna teleportacja:** po każdym wejściu w strefę Król jest natychmiast przenoszony efektem `teleport_object` z powrotem na pozycję wyjściową `(12, 227)` (Król nigdy nie jest niszczony, co pozwala na płynną korektę w obu kierunkach w zakresie `-2 <-> -1 <-> 0 <-> +1 <-> +2` w ciągu pierwszych 50 sekund gry).
 
 
-* Na pasie `X = 1..3` umieszczane są fizyczne znaczniki aktualnej fazy (`TORCH_ID = 499` dla `P1` na `(2, 222)`, `(2, 226)`, `(2, 230)`).
+* **Fizyczne znaczniki na pasie NW ukrytym w mgle wojny (`X = 1..3`, >20 kafelków od Sanktuarium):**
+  * Śledzenie trudności Sanktuarium: pojedyncza pochodnia `TORCH_ID` przemieszczana dynamicznie po polach `SANCTUARY_STATE_COORDS` (`(2, 170)` dla -2, `(2, 174)` dla -1, `(2, 178)` dla 0, `(2, 182)` dla +1, `(2, 186)` dla +2).
+  * Śledzenie fazy gry: znaczniki `TORCH_ID` dla `P1` na `(2, 222)` (Faza I), `(2, 226)` (Faza II), `(2, 230)` (Faza III).
 
 ### 2.3. Budżet obiektów
 
-* **Łączna liczba wszystkich obiektów na mapie w `0:00`:** `7 195` (docelowy twardy limit: **`< 8 500` obiektów**).
-* **Liczba drzew dekoracyjnych (`OAK_TREE_ID = 349`, `PINE_TREE_ID = 350`, `CYPRESS_TREE_ID = 1347`, `OLIVE_TREE_ID = 1349`):** `5 769` (docelowy budżet: **`3 000 .. 8 000` drzew**).
+* **Łączna liczba wszystkich obiektów na mapie w `0:00`:** `7 024` (docelowy twardy limit: **`< 8 500` obiektów**).
+* **Liczba drzew dekoracyjnych (`OAK_TREE_ID = 349`, `PINE_TREE_ID = 350`, `CYPRESS_TREE_ID = 1347`, `OLIVE_TREE_ID = 1349`):** `5 568` (docelowy budżet: **`3 000 .. 8 000` drzew**).
 * **Kolizje na siatce (`failed_placements` przy `strict=True`):** `0`.
 
 ---
 
 ## 3. Mechaniki, fale, timery i logika triggerów
 
-Scenariusz generuje łącznie **312–322 triggery** podzielone między moduł mechanik systemowych (`gondolin_mechanics.py`) oraz moduł zadań i faz (`gondolin_quests.py`).
+Scenariusz generuje łącznie **334 triggery** podzielone między moduł mechanik systemowych (`gondolin_mechanics.py`) oraz moduł zadań i faz (`gondolin_quests.py`).
 
-### 3.1. Inicjalizacja technologii, nazw i statystyk RPG (`0:01 – 0:03`)
+### 3.1. Inicjalizacja technologii, nazw i statystyk RPG (`0:01 – 0:04`)
 
 1. **`Init_01s_Techs_And_Names` (`timer = 1`):**
 * Bada dla graczy technologie Kuźni, Uniwersytetu i Klasztoru.
 * Nadaje polskie nazwy fabularne wszystkim jednostkom z `UNIT_DISPLAY_NAMES` oraz głównym budowlom (`tower_of_turgon`, `royal_fountain_bldg`, `glingal_tree`, `belthil_tree`, `great_forge`, `great_market`, `aqueduct_control`, `salgant_manor`, `snow_watchtower`, `house_of_tuor`, `caragdur_keep`, `balrog_altar`, `winch_bronze`, `winch_silver`, `winch_steel`).
 
 
-2. **`Init_03s_RPG_Unit_And_Hero_Stats` (`timer = 3`):**
-* Modyfikuje atrybuty (`ATTR_HIT_POINTS = 0`, `ATTR_MOVEMENT_SPEED = 5`, `ATTR_ARMOR = 8`, `ATTR_ATTACK = 9`, `ATTR_SEARCH_RADIUS = 19`, `ATTR_BLAST_WIDTH = 22`, `ATTR_HERO_STATUS = 40`, `ATTR_REGENERATION_RATE = 109`) dla:
-* jednostek orszaku `P1–P4` (`+85 HP`, `+6 ATK`, `+2/+2 Armor`, `30 HP/min` regeneracji, a dla Kowali Roga `1703` i Gwardii Źródła `1661` dodatkowo premie specjalne),
-* 9 bohaterów `BALANCE["heroes"]` (z rozróżnieniem klasy ataku `3 = Pierce` dla `HERO_RANGED_IDS` oraz `4 = Melee` dla pozostałych),
-* 5 bossów `BALANCE["bosses"]` (`Gothmog 1713`, `Balrog 1737`, `Maeglin 640/176`, `Żelazny Smok 548`, `Uruloki 188`),
-* jednostek liniowych AI (`1124/1125`, `473`, `878`, `532/892`).
+2. **Rozbicie `Init_03s` per kategoria (`timer = 3`):**
+* `Init_03s_Noldor_Retinue_Stats`: modyfikacje atrybutów dla jednostek orszaku `P1–P4` (`+85 HP`, `+6 ATK`, `+2/+2 Armor`, `30 HP/min` regeneracji, specjalne premie dla Kowali Młota `1703` i Gwardii Źródła `1661`, HP saperów Idril `240`).
+* `Init_03s_Noldor_Hero_Stats`: pętla po 9 bohaterach `BALANCE["heroes"]` (status bohatera, MaxHP, regeneracja `120 HP/min`, atak z podziałem klas — klasa `3 = Pierce` dla `HERO_EGALMOTH_ID (200)` i `HERO_DUILIN_ID (642)` oraz klasa `4 = Melee` dla 7 pozostałych, w tym Glorfindela `640` — pancerz, prędkość, blast width).
+* `Init_03s_Morgoth_Enemy_Stats`: pełne statystyki HP, ataku z przypisaną klasą oraz pancerzy melee/pierce dla wszystkich 9 typów jednostek wroga (`1125, 473, 4, 24, 89, 757, 542, 878, 892`).
+* `Init_03s_Morgoth_Boss_Stats`: pętla po bossach `BALANCE["bosses"]` (`Gothmog 1713`, `Balrog 1737`, `Maeglin 176`, `Żelazny Smok 548`, `Uruloki 188`).
 
 
-* *Wymagania korekcyjne (Etap C):* uzupełnienie aktualnego HP bohaterów do nowego maksimum (`heal_object` / `change_object_hp`), prawidłowe kodowanie klas ataku/pancerza po wymianie ID bohaterów oraz dodanie brakujących modyfikacji HP/ataku/pancerza dla jednostek wroga `4, 24, 89, 756/757, 542` i pancerza dla `1125, 473, 878, 892`.
+
+3. **`Init_04s_Full_Heal_After_MaxHP` (`timer = 4`):**
+* Wykonuje pełne leczenie (`heal_object` na `+5000 HP`) wszystkich jednostek wojskowych `P1–P8` oraz bezpośrednią pętlę per bohater Noldorów, podnosząc ich aktualne punkty życia do nowego poziomu maksymalnego (likwidacja startowego ubytku zdrowia, np. 35/1150 HP u Idril).
 
 
 
@@ -466,9 +473,13 @@ Scenariusz generuje łącznie **312–322 triggery** podzielone między moduł m
 
 1. **`Aura_Fountain_Local_Heal_Allies` (`timer = 4, looping = True`):** leczy jednostki `P1–P4` stojące w sektorze `royal_fountain (55..67, 55..67)` (zastępując dawny, podatny na błędy układ dodawania i odejmowania globalnej regeneracji).
 2. **`Aura_Fountain_Weaken_Balrogs` (`timer = 5, looping = True`)** oraz **`Aura_Fountain_Ecthelion_Blessing`**: osłabiają Balrogów P7 wchodzących w wodę Fontanny i wzmacniają oddziały P2 w obecności Ectheliona (`168`).
-3. **`Hazard_North_Avenue_Fires` (`timer = 4, looping = True`):** zadaje obrażenia jednostkom w strefie pożaru `north_fire_zone (52..70, 90..104)` do momentu odbicia Akweduktu przez P2 (co wyłącza ten trigger i usuwa obiekty ognia `north_fire_objects`).
+3. **`Hazard_North_Avenue_Fires` (`timer = 4, looping = True`):** zadaje obrażenia jednostkom w strefie pożaru `north_fire_zone (55..67, 98..105)` do momentu odbicia Akweduktu przez P2 (co wyłącza ten trigger i usuwa obiekty ognia `north_fire_objects`).
 4. **`Aura_Rog_Wrath_Against_Balrogs`:** premia bojowa dla Roga i Kowali Młota w starciu z Balrogami P7.
-5. **Sanktuarium Balansu (`Sanctuary_Harder_Step1/2`, `Sanctuary_Easier_Step1/2`):** wejście Królem (`434`) w strefę północną (`8..16, 232..235`) podnosi HP i atak jednostek Morgotha (tryb Trudniejszy / +20%), a wejście w strefę południową (`8..16, 221..224`) wzmacnia Noldorów (tryb Łatwiejszy).
+5. **Sanktuarium Balansu (5-stanowy automat dwukierunkowy `-2 <-> -1 <-> 0 <-> +1 <-> +2`):**
+   * Wybór trudności odbywa się za pomocą Króla P1 (`434`) w zwartej komorze `(8..16, 222..232)` w narożniku NW (całkowicie odsłoniętej przez 3 `MAP_REVEALER_ID`).
+   * Krok w GÓRĘ ekranu w `harder_area (9..15, 223..225)` ku pochodniom podnosi trudność o +1 (do maks. +2), dodając wrogom HP i atak oraz przyznając `+500` / `+1000 Chwały`.
+   * Krok w DÓŁ ekranu w `easier_area (9..15, 229..231)` ku chorągwiom obniża trudność o -1 (do min. -2), redukując statystyki wrogów. Kary punktowe (`-500` / `-1000 Chwały`) są odraczane do momentu zwycięstwa w `Victory_Reached_Vale_Of_Sirion`, aby uniemożliwić exploit z zerowaniem stanu złota w pierwszych sekundach gry.
+   * Po każdym kroku Król jest teleportowany (`teleport_object`) na środek `(12, 227)` bez usuwania jednostki. Stan trudności śledzi pojedyncza pochodnia na odizolowanym pasku `X=2, Y=170..186` ukrytym w mgle wojny.
 
 ### 3.3. System „Trzech Pieczęci Turgona” i okno ochronne `GraceCoRespawn`
 
@@ -519,7 +530,7 @@ Siedem kluczowych sektorów bojowych używa trójstopniowego generatora spotkań
 
 1. **`Enc_{name}_Base` (`enabled = True`):** gdy jednostka wojskowa wskazanego gracza wejdzie w obszar sektora, spawnuje oddział bazowy wroga z rozkazem `attack_move` i aktywuje `Enc_{name}_EliteAmbush`.
 2. **`Enc_{name}_EliteAmbush` (`enabled = False`, `timer = 20`):** jeśli po 20 sekundach w poszerzonym sektorze (`sector ± 8` kafelków) znajduje się co najmniej 8 jednostek wojskowych graczy (`quantity = 8`), spawnuje elitarny odwód wroga, wyświetla ostrzeżenie z flarą i aktywuje `Enc_{name}_EliteReward`.
-3. **`Enc_{name}_EliteReward` (`enabled = False`, `timer = 8`):** po wybiciu oddziału elitarnego i utrzymaniu sektora przez gracza przyznaje **`+200 Chwały` (Złota P1)**. *(W Etapie D warunek globalny `own_fewer_objects(ai_p, unit_id, 0)` zostaje zastąpiony lokalną identyfikacją oddziału, aby istniejące na mapie dwa Balrogi P7 nie blokowały nagrody za Balroga w `West_Forges`).*
+3. **`Enc_{name}_EliteReward` (`enabled = False`, `timer = 8`):** po wybiciu oddziału elitarnego i utrzymaniu sektora przez gracza przyznaje **`+200 Chwały` (Złota P1)**. *(Wyeliminowano blokowanie nagrody za Balroga w `West_Forges`: usunięto dwa początkowe statyczne Balrogi P7 stojące na mapie w `gondolin_map.py` oraz zmieniono bazowy spawn Ołtarza w Tumladen na P8, dzięki czemu w Fazie I jedynym Balrogiem P7 na mapie jest elitarny demon w Kuźniach Roga, a warunek `own_fewer_objects(P7, ENEMY_BALROG_BOSS_ID, 0)` działa niezawodnie).*
 
 
 
@@ -529,7 +540,7 @@ Siedem kluczowych sektorów bojowych używa trójstopniowego generatora spotkań
 * `West_Forges` (Faza I, P1 - Rog): baza `7x 473 (P5) + 4x 878 (P8)`, elita `1x Balrog 1737 (P7)`.
 * `East_Market` (Faza I, P2): baza `10x 1124/1125 (P5) + 6x 24 (P5)`, elita `6x 756/757 (P5)`.
 * `Tumladen_Wolves_1` (Faza II, P1): baza `10x 89 (P5) + 6x 756/757 (P5)`, elita `6x 756/757 (P5)`.
-* `Balrog_Altar_Tumladen` (Faza II, P1 - Rog): baza `1x Balrog 1737 (P7) + 8x 473 (P5)`, elita `1x Balrog 1737 (P7)`.
+* `Balrog_Altar_Tumladen` (Faza II, P1 - Rog): baza `1x Balrog 1737 (P8) + 8x 473 (P5)`, elita `1x Balrog 1737 (P7)`.
 * `Orfalch_orfalch_gate_3` (Faza III, P1): baza `7x 473 (P5) + 5x 24 (P5)`, elita `1x Balrog 1737 (P7)`.
 * `Orfalch_orfalch_gate_5` (Faza III, P1): baza `7x 473 (P5) + 5x 24 (P5)`, elita `1x Balrog 1737 (P7)`.
 * `Orfalch_orfalch_gate_7` (Faza III, P1): baza `7x 473 (P5) + 5x 24 (P5)`, elita `1x Balrog 1737 (P7)`.
@@ -611,7 +622,7 @@ Siedem kluczowych sektorów bojowych używa trójstopniowego generatora spotkań
 3. **Obowiązkowe filtrowanie każdego warunku `objects_in_area`:** Żaden warunek `objects_in_area` w całym scenariuszu nie może mieć jednocześnie `object_list == -1` oraz `object_type == -1` (zapobiega to przypadkowemu wyzwalaniu triggerów przez ptaki `GAIA`, znaczniki `MAP_REVEALER_ID` lub płomienie).
 
 
-4. **Wymóg warunków podtrzymujących na wszystkich triggerach `UI_*` (`display_on_screen = 1`):** Żaden trigger wyświetlany w panelu *Objectives* (zarówno aktywny w `0:00`, jak i włączany w późniejszych fazach) nie może mieć pustej listy `conditions`, ponieważ silnik Genie wykonuje bezwarunkowy trigger w pierwszej klatce jego aktywności i przekreśla tekst zadania.
+4. **Wymóg warunków podtrzymujących na wszystkich triggerach `UI_*` (`display_on_screen = 1`):** Żaden trigger wyświetlany w panelu *Objectives* (zarówno aktywny w `0:00`, jak i włączany w późniejszych fazach) nie może mieć pustej listy `conditions` ani atrapowego `timer >= 900000`. Triggery zadań posiadają rzeczywiste warunki ich ukończenia (np. `destroy_object`, `objects_in_area`), dzięki czemu silnik Genie przekreśla je dokładnie w momencie spełnienia celów (*strikethrough*), a triggery licznikowe posiadają warunki zaporowe uniemożliwiające samoczynne wyzwolenie. Co kluczowe, triggery ukończenia zadań fabularnych nie dezaktywują powiązanych triggerów UI, pozwalając na pozostanie przekreślonego wpisu na liście celów aż do masowego czyszczenia na granicy faz.
 
 
 5. **Trójpoziomowa dyscyplina walidacji:**

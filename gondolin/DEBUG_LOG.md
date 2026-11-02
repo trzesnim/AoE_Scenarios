@@ -349,38 +349,76 @@ Po wykryciu obiektów zwłok (`693, 1124, 1130, 756`), pocisku (`469`) oraz akty
 
 ---
 
-## 2026-11-02 — ZAMKNIĘCIE WERYFIKACJI ETAPÓW 3 I 4: 100% PASS WE WSZYSTKICH SUITACH
+## 2026-11-02 — ZAMKNIĘCIE ETAPU 3, 4 ORAZ CZĘŚCI UI ETAPU 5: PEŁNA STABILIZACJA I ZIELONE TESTY
 
-- **Aktualizacja `test_stage_a_logic.py`:**
-  - Do sygnatury `EffAPI.heal_object` dodano parametr `object_list_unit_id: int | None = None` (obsługa `Init_04s_Full_Heal_After_MaxHP`).
-  - Dodano metodę `EffAPI.teleport_object(location_x, location_y, selected_object_ids, **kwargs)` (obsługa dwukierunkowego Sanktuarium).
-  - Zaktualizowano asercję liczby triggerów: `len(trigs) == 334`.
-- **Wyniki pełnego zestawu testów:**
-  - `generate_gondolin_scenario.py`: **PASS (0)** (334 triggery, 5568 drzew, 0 kolizji placementu).
-  - `pytest validate_scenario.py -v`: **PASS (10/10)** (brak CTD, brak zwłok/pocisków, poprawne pętle, obszary, lock AI, UI).
-  - `test_stage_a_logic.py`: **PASS** (wszystkie testy dyskretne 15A..18 zakończone sukcesem).
-  - `test_stage_b_grid.py`: **PASS** (0 kolizji, 5/5 blokad szczelnych, pełna spójność BFS).
-  - `stage_a1_diagnostic_and_variants.py`: **PASS** (0 magic numbers poza config.py, 9/9 bohaterów obecnych, symetria dyplomacji 8x8).
-- **Status ROADMAP:** Etap 3 i Etap 4 w pełni zamknięte (`[x]`). Przejście do realizacji Etapu 5 i Etapu 7.
+### 1. Podsumowanie wdrożonych modyfikacji i poprawek architektonicznych
 
+1. **Etap 3 — Statystyki jednostek i leczenie wczesnej gry:**
+   - Rozbito dawny monolityczny trigger `Init_03s` na 4 wyspecjalizowane triggery: `Init_03s_Noldor_Retinue_Stats`, `Init_03s_Noldor_Hero_Stats`, `Init_03s_Morgoth_Enemy_Stats`, `Init_03s_Morgoth_Boss_Stats` (`timer=3`).
+   - Uzupełniono pełne statystyki HP, ataku (z rozróżnieniem klas `3=Pierce` i `4=Melee`) oraz pancerzy dla 9 jednostek wroga w `BALANCE["enemies"]` (`1125, 473, 4, 24, 89, 757, 542, 878, 892`).
+   - Wdrożono trigger `Init_04s_Full_Heal_After_MaxHP` (`timer=4`), aplikujący `heal_object` (+5000 HP) na jednostkach wojskowych `P1–P8` i bezpośrednio na 9 bohaterach, co zlikwidowało błąd startowego braku HP (np. 35/1150 HP u Idril).
+
+2. **Etap 4 — Spokojne otwarcie i dwukierunkowe Sanktuarium:**
+   - Wprowadzono 50-sekundową ciszę bojową `[0:00, 0:50)` z narracją wprowadzającą (`Intro_02s`, `Warning_30s`).
+   - Opóźniono bunt Maeglina `P1_Spawn_Maeglin_Traitors` na `0:50` (przenosząc spawn na `(22, 38)` poza obrys klasztoru) oraz zrzuty i szturm Żelaznych Smoków `P6_Spawn_Iron_Dragons_Phase1` na `1:05`.
+   - Przebudowano geometrię miejską: start P2 przesunięty na `(80, 48)`, akwedukt na `(90, 78)` (0 kolizji placementu).
+   - Wdrożono zwarty, 5-stanowy automat dwukierunkowy Sanktuarium Balansu (`-2 <-> -1 <-> 0 <-> +1 <-> +2`) w komorze `(8..16, 222..232)` w pełni oświetlonej przez 3 `MAP_REVEALER_ID`. Król P1 (`434`) porusza się w GÓRĘ ekranu (ku pochodniom) na `harder_area (9..15, 223..225)` lub w DÓŁ (ku chorągwiom) na `easier_area (9..15, 229..231)` i po każdym kroku jest natychmiast teleportowany (`teleport_object`) na środek `(12, 227)` bez usuwania jednostki. Stan trudności śledzi pojedyncza pochodnia `TORCH_ID` na odizolowanym pasku NW (`X=2, Y=170..186`) ukrytym w mgle wojny.
+
+3. **Etap 5 (Część UI i naprawa nagrody w Kuźniach Roga):**
+   - **Natywne przekreślanie celów (Strikethrough) w UI:** Usunięto atrapowy warunek `timer=999999` ze wszystkich 18 triggerów zadań `UI_*`. Wprowadzono rzeczywiste warunki ukończenia (`destroy_object`, `objects_in_area`, `own_fewer_objects`) oraz warunki zaporowe `(2, 166)` dla triggerów statusowych/licznikowych. Usunięto przedwczesną dezaktywację triggerów UI z triggerów ukończenia questów — dzięki temu silnik Genie samoczynnie przekreśla wykonane zadanie na liście celów na ekranie, a masowe czyszczenie następuje dopiero przy przejściach fazowych (`t_gothmog_slain`, `t_start_p3`).
+   - **Odblokowanie nagrody w Kuźniach Roga (`West_Forges`):** Wyeliminowano konflikt zliczania Balrogów w `create_escalating_encounter`. Usunięto dwa początkowe statyczne Balrogi P7 umieszczone na mapie w `gondolin_map.py` (`(145, 108)` w Tumladen oraz `(184, 173)` w Cirith Thoronath) oraz zmieniono bazowy spawn Ołtarza w Tumladen na P8. Dzięki temu w Fazie I jedynym Balrogiem P7 na mapie jest elitarny demon w Kuźniach Roga, a warunek `own_fewer_objects(P7, ENEMY_BALROG_BOSS_ID, 0)` poprawnie przyznaje `+200 Chwały`.
+   - **Wzmocnienie walidatora:** W `validate_scenario.py` dodano test asercyjny zabraniający stosowania atrapowych warunków `timer >= 900000` w triggerach `UI_*`.
 
 ---
 
-### 3. Instrukcja (Prompt) dla kolejnego modelu wznawiającego pracę
+### 2. Aktualny stan weryfikacji i testów
+
+Wszystkie zestawy testów przechodzą w 100% na zielono:
+
+| Skrypt / Narzędzie | Wynik | Kluczowe wskaźniki |
+|---|---|---|
+| `generate_gondolin_scenario.py` | **PASS (0)** | 334 triggery, 7024 obiekty, 5568 drzew, 0 błędów placementu (`failed_placements == 0`), czysty zapis binarny. |
+| `pytest validate_scenario.py` | **PASS (10/10)** | 100% testów: brak CTD, brak zwłok/pocisków, poprawne pętle czasowe, prostokąty obszarów, blokada PromiDE AI, bezpieczeństwo UI (brak atrapowych timerów). |
+| `test_stage_a_logic.py` | **PASS** | 334 triggery, symulacja behawioralna (grupy 15A..18, w tym 5 scenariuszy GraceCoRespawn i dwuścieżkowy finał). |
+| `test_stage_b_grid.py` | **PASS** | 0 kolizji budynków, 5/5 blokad szczelnych w 0:00, drożność tras BFS we wszystkich fazach gry. |
+| `stage_a1_diagnostic_and_variants.py` | **PASS** | 0 magic numbers poza `gondolin_config.py`, obecność 9 bohaterów, symetria dyplomacji 8x8. |
+
+---
+
+### 3. HANDOFF — Instrukcja dla kolejnego modelu wznawiającego prace
 
 ```markdown
-Wznawiasz pracę nad projektem scenariusza Gondolinu po audycie commitu `10d5aeebafea0609789a2ce76e7e8ae23736e8a0`.
-Wszystkie 4 zadania z Etapu 3 i 4 zostały już zaimplementowane w kodzie scenariusza (`gondolin_mechanics.py`, `gondolin_quests.py`, `gondolin_map.py`, `gondolin_config.py`), a `generate_gondolin_scenario.py` oraz `pytest validate_scenario.py` przechodzą w 10/10 PASS.
+KONTEKST PROJEKTU:
+Repozytorium: AoE_Scenarios / gondolin
+Scenariusz: Silmarillion: Upadek Gondolinu (4P Co-op RPG)
+Stan bazowy: Commit z pełnym wdrożeniem Etapów 2, 3, 4, 6 oraz części UI Etapu 5. Wszystkie 4 główne zestawy testów (generate, pytest, test_stage_a, test_stage_b) są w 100% ZIELONE (PASS).
+Liczba triggerów: 334. Kolizje placementu: 0.
 
-Twoje zadania do wykonania w tym kroku:
-1. Zaktualizuj plik pomocniczy `gondolin/test_stage_a_logic.py` tak, aby odzwierciedlał nowe efekty w mocku `EffAPI`:
-   - W klasie `EffAPI` dodaj parametr `object_list_unit_id: int | None = None` do metody `heal_object()` (linia ~221).
-   - W klasie `EffAPI` dodaj brakującą metodę `teleport_object(self, location_x: int = 0, location_y: int = 0, selected_object_ids: list[int] | None = None, **kwargs) -> None:`.
-   - Sprawdź i dostosuj testy behawioralne w `test_stage_a_logic.py`, aby uwzględniały dwukierunkowe Sanktuarium i nową liczbę triggerów (334).
-2. Uruchom pełen zestaw weryfikacyjny:
-   - `py gondolin/generate_gondolin_scenario.py`
-   - `py -m pytest gondolin/validate_scenario.py -v`
-   - `py gondolin/test_stage_a_logic.py`
-   - `py gondolin/test_stage_b_grid.py`
-3. Zaktualizuj checkboxy Etapu 3 i 4 w `gondolin/ROADMAP.md` oraz odnotuj sukces w `gondolin/DEBUG_LOG.md`.
+ZREALIZOWANO DOTYCHCZAS:
+- Etap 1 & 2: Eliminacja błędnych ID zwłok/pocisków/statków, neutralizacja zawieszeń PromiDE AI (set_immobile_ai + lock_personality), stabilizacja pętli zrzutów P6.
+- Etap 3: Rozbicie Init_03s na 4 triggery, pełne statystyki 9 jednostek wroga w BALANCE, leczenie MaxHP w Init_04s (likwidacja 35/1150 HP).
+- Etap 4: Cisza bojowa [0:00, 0:50), Maeglin w 0:50, Smoki w 1:05, dwukierunkowy automat Sanktuarium Balansu (-2..+2 z teleport_object Króla).
+- Etap 5 (Część UI & Balrogi): Usunięcie atrapowego timer=999999 z 18 triggerów UI_*, wdrożenie realnych warunków ukończenia i natywnego strikethrough w silniku, naprawa nagrody w Kuźniach Roga (usunięcie 2 statycznych Balrogów P7 i ołtarz P8).
+- Etap 6: Nowa estetyka i geometria mapy (0 kolizji, 5568 drzew, bramy miejskie 64/88, kołowroty GAIA, posągi Glingal/Belthil).
+
+KOLEJNE ZADANIE DO WYKONANIA (ETAP 7 Z ROADMAP.md):
+1. Rozbudowa testów BFS w `gondolin/test_stage_b_grid.py`:
+   - Przejście z ręcznej tabeli footprintów na dokładne obrysy zapisane w `SafeMapGrid`.
+   - Osobne testy otwierania każdej z 7 Bram Orfalch Echor (`orfalch_gate_1` do `orfalch_gate_7` testowane pojedynczo).
+   - Osobne testy drożności wejścia na Dolny i Górny Szlak Tumladen.
+   - Testy negatywne BFS symulujące zablokowanie korytarza alei murem lub budynkiem.
+2. Rozbudowa walidatora po deserializacji w `gondolin/generate_gondolin_scenario.py`:
+   - Rozbudowa `inspect_and_validate_scenario()` o słownik `validation_manifest` generowany przed zapisem i rygorystycznie sprawdzany po powtórnym wczytaniu pliku `.aoe2scenario` przez `AoE2DEScenario.from_file()`:
+     * map_size == 240, active_players == 8, role human/AI, cywilizacje, symetryczna dyplomacja 8x8.
+     * obecność wszystkich 9 bohaterów, poprawność reference_id budynków questowych.
+     * brak pustych warunków w triggerach UI_*, brak niefiltrowanych objects_in_area.
+     * zgodność 1:1 parametrów efektów modify_attribute przed i po zapisie.
+3. Weryfikacja:
+   - Uruchomienie pełnego pakietu testów:
+     py gondolin/generate_gondolin_scenario.py
+     py -m pytest gondolin/validate_scenario.py -v
+     py gondolin/test_stage_a_logic.py
+     py gondolin/test_stage_b_grid.py
+4. Playtest w silniku gry AoE2: DE:
+   - Weryfikacja zachowania w grze pod kątem płynności, braku desynchronizacji/crashy i czytelności przekreślanych zadań w UI.
 ```

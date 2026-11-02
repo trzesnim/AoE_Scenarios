@@ -364,7 +364,7 @@ Każdy etap podlega trójpoziomowej weryfikacji:
 
 ---
 
-### Etap 3: Statystyki bohaterów w `0:03`, uzupełnienie aktualnego HP i balans jednostek Morgotha
+### Etap 3: Statystyki bohaterów w `0:03`, uzupełnienie aktualnego HP i balans jednostek Morgotha [UKOŃCZONO 2026-11-02]
 
 * **Modyfikowane pliki `.py`:** `gondolin_config.py`, `gondolin_mechanics.py`, `test_stage_a_logic.py`.
 * **Zakres działań:**
@@ -380,7 +380,7 @@ Każdy etap podlega trójpoziomowej weryfikacji:
 
 ---
 
-### Etap 4: Spokojne otwarcie `[0:00, 0:50)`, geometria Akweduktu/Caragdûr i 4-warunkowy Gothmog
+### Etap 4: Spokojne otwarcie `[0:00, 0:50)`, geometria Akweduktu/Caragdûr i 4-warunkowy Gothmog [UKOŃCZONO 2026-11-02]
 
 * **Modyfikowane pliki `.py`:** `gondolin_map.py`, `gondolin_quests.py`, `gondolin_mechanics.py`, `gondolin_campaign_guide.md`.
 * **Zakres działań:**
@@ -406,7 +406,7 @@ Każdy etap podlega trójpoziomowej weryfikacji:
 
 ---
 
-### Etap 5: Naprawa *Objectives* (`UI_*`), elitarnych zasadzek (`West_Forges`), symulatora i `GraceCoRespawn`
+### Etap 5: Naprawa *Objectives* (`UI_*`), elitarnych zasadzek (`West_Forges`), symulatora i `GraceCoRespawn` [CZĘŚCIOWO UKOŃCZONO: UI & Kuźnie Roga]
 
 * **Modyfikowane pliki `.py`:** `gondolin_quests.py`, `gondolin_mechanics.py`, `test_stage_a_logic.py`, `gondolin_config.py`, `gondolin_campaign_guide.md`.
 * **Zakres działań:**
@@ -426,7 +426,7 @@ Każdy etap podlega trójpoziomowej weryfikacji:
 
 ---
 
-### Etap 6: Przebudowa obiektów mapy (Kołowroty, Fontanna, *Glingal/Belthil*, bramy miejskie) i zagęszczenie wizualne
+### Etap 6: Przebudowa obiektów mapy (Kołowroty, Fontanna, *Glingal/Belthil*, bramy miejskie) i zagęszczenie wizualne [UKOŃCZONO 2026-11-02]
 
 * **Modyfikowane pliki `.py`:** `gondolin_map.py`, `gondolin_mechanics.py`, `gondolin_quests.py`.
 * **Zakres działań:**
@@ -454,7 +454,7 @@ Każdy etap podlega trójpoziomowej weryfikacji:
 
 ---
 
-### Etap 7: Rozbudowa testów BFS (7 bram osobno) i końcowy walidator manifestu po deserializacji
+### Etap 7: Rozbudowa testów BFS (7 bram osobno) i końcowy walidator manifestu po deserializacji [KOLEJNY PRIORYTETOWY ETAP DO REALIZACJI]
 
 * **Modyfikowane pliki `.py`:** `test_stage_b_grid.py`, `generate_gondolin_scenario.py`, `test_stage_a_logic.py`.
 * **Zakres działań:**
@@ -478,3 +478,5 @@ Każdy etap podlega trójpoziomowej weryfikacji:
 - [x] **Etap 3: Statystyki bohaterów w `0:03`, uzupełnienie aktualnego HP (`Init_04s`) i balans jednostek Morgotha:** Rozbito `Init_03s` na 4 triggery (`Init_03s_Noldor_Retinue_Stats`, `Init_03s_Noldor_Hero_Stats`, `Init_03s_Morgoth_Enemy_Stats`, `Init_03s_Morgoth_Boss_Stats`), wdrożono pełne HP/atak/pancerze dla 9 jednostek Morgotha w `BALANCE["enemies"]`, dodano `Init_04s_Full_Heal_After_MaxHP` (`timer=4`, leczenie do pełna +5000 HP likwidujące startowe 35/1150 HP u Idril).
 - [x] **Etap 4: Spokojne otwarcie `[0:00, 0:50)`, geometria Akweduktu/Caragdûr, dwukierunkowe Sanktuarium:** Wycofano obozy P5/P6 poza mury (`Y>=124`, `X>=110`), wieże Caragdûr przekazano GAIA; cisza bojowa `[0:00, 0:50)` z narracją `Intro_02s` i `Warning_30s`; opóźniono bunt Maeglina na `0:50` (spawn poza klasztorem), a szturm Żelaznych Smoków na `1:05`; przeniesiono start P2 na `(80, 48)` i akwedukt na `(90, 78)`; wdrożono 5-poziomowy dwukierunkowy automat Sanktuarium (`-2 <-> -1 <-> 0 <-> +1 <-> +2`) z `teleport_object` Króla bez jego usuwania i śledzeniem pochodnią stanu.
 - [x] **Etap 6: Przebudowa obiektów mapy i siatki anty-kolizyjnej:** Wieże Siedmiu Bram przekazano GAIA, kołowroty wymieniono na nieuzbrojone `MILL_ID`, Fontannę Królewską na nazwany posąg `(61, 61)`, drzewa *Glingal* i *Belthil* na nazwane posągi P4 z drzewami obok; bramy miejskie `64`/`88` osadzono w murach; 0 kolizji placementu w `gondolin_map.py` (`failed_placements == 0`), obwód oblężniczy `X=121` / `Y=134`, 5568 drzew dekoracyjnych, testy BFS w 100% PASS.
+- [x] **Etap 5 (Część A — Panel Celów UI i Zasadzki):** Usunięcie atrapowego `timer=999999` ze wszystkich 18 banerów zadań `UI_*`, wdrożenie realnych warunków ukończenia (`destroy_object`, `objects_in_area`, `own_fewer_objects`) oraz natywnego mechanizmu przekreślania celów (*strikethrough*) w silniku gry (wycofano przedwczesną dezaktywację triggerów UI); rozwiązanie problemu blokowania nagrody w Kuźniach Roga (`West_Forges`) poprzez usunięcie 2 statycznych Balrogów P7 z mapy i zmianę bazy Ołtarza w Tumladen na P8; rozszerzenie walidatora o test blokujący `timer >= 900000` dla celów UI.
+- [ ] **Etap 7 (KOLEJNY PRIORYTET DO REALIZACJI):** Rozbudowa testów BFS w `test_stage_b_grid.py` (indywidualne otwieranie każdej z 7 bram *Orfalch Echor*, testy negatywne barier i wąskich gardeł) oraz wdrożenie twardego walidatora manifestu (`validation_manifest`) po deserializacji `AoE2DEScenario.from_file()` w `generate_gondolin_scenario.py`, a następnie playtest w grze *AoE2: DE*.
