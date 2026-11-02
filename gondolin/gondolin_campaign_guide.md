@@ -68,17 +68,18 @@ Przed uruchomieniem meczu w trybie Wieloosobowym (Multiplayer) lub Jednoosobowym
 ### A. System 3 Pieczęci Rezerwy Turgona (Ochrona przed nagłym Defeat)
 W scenariuszu śmierć kluczowego bohatera nie kończy gry natychmiastową porażką:
 * Drużyna rozpoczyna z **3 wspólnymi Pieczęciami Rezerwy**. Stan pieczęci jest na bieżąco widoczny w panelu zadań (*Objectives*).
-* Gdy którykolwiek z głównych lordów (Tuor, Ecthelion, Glorfindel, Idril) lub mały Eärendil polegnie:
+* Gdy którykolwiek z 9 bohaterów Noldorów polegnie:
   1. Zużywana jest **1 Pieczęć Rezerwy** (drużyna traci 500 Punktów Chwały).
-  2. Poległy bohater **odradza się w pełnym zdrowiu na aktualnym Punkcie Zbornym** (Checkpoincie danej fazy) w asyście 6-osobowego oddziału Gwardii Ratunkowej.
+  2. Poległy bohater **odradza się w pełnym zdrowiu na aktualnym Punkcie Zbornym** (Checkpoincie danej fazy) w asyście 6-osobowego oddziału Gwardii Ratunkowej oraz 20-sekundowej lokalnej aury leczenia.
+  3. **Okno ochronne `GraceCoRespawn` (3 sekundy):** Jeżeli w ciągu 3 sekund od śmierci pierwszego bohatera polegnie kolejny bohater (np. od tego samego uderzenia obszarowego), odradza się on natychmiast na Punkcie Zbornym **bez zużywania kolejnej Pieczęci** (i bez dodatkowej 6-osobowej eskorty gwardzistów).
 * **Warunek Porażki:** Dopiero utrata bohatera przy **0/3 Pieczęciach** skutkuje ostateczną klęską Gondolinu.
 * *Wyjątek fabularny:* Poświęcenie Glorfindela w pojedynku z Balrogiem nad przepaścią w Fazie III **nie zużywa** Pieczęci Rezerwy (jest to kanoniczne zwycięstwo fabularne!).
 
 ### B. Sanktuarium Balansu (-2 do +2)
-W lewym górnym rogu mapy `(12, 228)` znajduje się odizolowana komnata z Królem Gracza 1:
-* **Wejście na pole północne (+Trudniej):** Zwiększa punkty życia wrogów o +20 HP i atak o +2, nagradzając graczy premią `+1000 Punktów Chwały`.
-* **Wejście na pole południowe (-Łatwiej):** Obniża punkty życia wrogów o 15% kosztem `-500 Punktów Chwały`.
-* Po dokonaniu wyboru komnata jest automatycznie oczyszczana, a Król powraca na środek po 2-sekundowym resecie.
+W lewym górnym rogu mapy `(12, 227)` znajduje się odizolowana komnata z Królem Gracza 1, działająca jako 5-stopniowy automat dwukierunkowy:
+* **Krok w GÓRĘ ekranu ku pochodniom (+Trudniej):** Zwiększa poziom trudności o +1 (maksymalnie +2). Wrogowie zyskują dodatkowe HP i atak, a gracze otrzymują premię `+500` / `+1000 Punktów Chwały`.
+* **Krok w DÓŁ ekranu ku chorągwiom (-Łatwiej):** Obniża poziom trudności o -1 (maksymalnie -2). Wrogowie tracą punkty życia i atak kosztem kary `-500` / `-1000 Punktów Chwały` (rozliczanej w finale).
+* Król nigdy nie jest niszczony – po każdym wyborze następuje natychmiastowa teleportacja z powrotem na centralną kolumnę, umożliwiając dowolną korektę balansu w trakcie pierwszych 50 sekund gry!
 
 ### C. Zrównoważone Uzupełnienia (Soft-Cap Reinforcements)
 Na początku Fazy II oraz Fazy III system analizuje stan armii każdego gracza z osobna:

@@ -298,7 +298,16 @@ def _setup_three_seals_of_turgon(tm: Any, ctx: dict[str, Any]) -> dict[str, Any]
         enabled=True,
         looping=False,
     )
-    safe_call(t_seals_ui.new_condition.timer, timer=999999)
+    safe_call(
+        t_seals_ui.new_condition.objects_in_area,
+        source_player=PlayerId.ONE,
+        object_list=TORCH_ID,
+        area_x1=2,
+        area_y1=166,
+        area_x2=2,
+        area_y2=166,
+        quantity=1,
+    )
     t_seals_ui.short_description = "[CHWALA] Pieczecie Rezerwy Turgona: 3/3 | Wynik Chwaly = Zloto P1"
     t_seals_ui.display_on_screen = 1
     t_seals_ui.description_order = 115
@@ -308,7 +317,16 @@ def _setup_three_seals_of_turgon(tm: Any, ctx: dict[str, Any]) -> dict[str, Any]
         enabled=False,
         looping=False,
     )
-    safe_call(t_seals_2_ui.new_condition.timer, timer=999999)
+    safe_call(
+        t_seals_2_ui.new_condition.objects_in_area,
+        source_player=PlayerId.ONE,
+        object_list=TORCH_ID,
+        area_x1=2,
+        area_y1=166,
+        area_x2=2,
+        area_y2=166,
+        quantity=1,
+    )
     t_seals_2_ui.short_description = "[CHWALA] Pieczecie Rezerwy Turgona: 2/3 (1 zuzyta!)"
     t_seals_2_ui.display_on_screen = 1
     t_seals_2_ui.description_order = 115
@@ -318,7 +336,16 @@ def _setup_three_seals_of_turgon(tm: Any, ctx: dict[str, Any]) -> dict[str, Any]
         enabled=False,
         looping=False,
     )
-    safe_call(t_seals_1_ui.new_condition.timer, timer=999999)
+    safe_call(
+        t_seals_1_ui.new_condition.objects_in_area,
+        source_player=PlayerId.ONE,
+        object_list=TORCH_ID,
+        area_x1=2,
+        area_y1=166,
+        area_x2=2,
+        area_y2=166,
+        quantity=1,
+    )
     t_seals_1_ui.short_description = "[CHWALA] Pieczecie Rezerwy Turgona: 1/3 (UWAGA: Ostatnia Pieczec!)"
     t_seals_1_ui.display_on_screen = 1
     t_seals_1_ui.description_order = 115
@@ -328,7 +355,16 @@ def _setup_three_seals_of_turgon(tm: Any, ctx: dict[str, Any]) -> dict[str, Any]
         enabled=False,
         looping=False,
     )
-    safe_call(t_seals_0_ui.new_condition.timer, timer=999999)
+    safe_call(
+        t_seals_0_ui.new_condition.objects_in_area,
+        source_player=PlayerId.ONE,
+        object_list=TORCH_ID,
+        area_x1=2,
+        area_y1=166,
+        area_x2=2,
+        area_y2=166,
+        quantity=1,
+    )
     t_seals_0_ui.short_description = "[ALARM] Pieczecie Rezerwy: 0/3 - Kolejna smierc Bohatera oznacza PORAZKE!"
     t_seals_0_ui.display_on_screen = 1
     t_seals_0_ui.description_order = 115
@@ -676,42 +712,88 @@ def _setup_phase1_city_and_dilemmas(tm: Any, ctx: dict[str, Any]) -> list[Any]:
 
     def add_p1_objective(name: str, text: str, order: int) -> Any:
         trig = tm.add_trigger(name=name, enabled=True, looping=False)
-        safe_call(trig.new_condition.timer, timer=999999)
         trig.short_description = text
         trig.display_on_screen = 1
         trig.description_order = order
         phase1_ui_triggers.append(trig)
         return trig
 
-    add_p1_objective(
+    ui_p1_main = add_p1_objective(
         "UI_P1_Main",
         "[FAZA I - GLOWNE] Odbijcie Caragdur i Akwedukt, po czym zbierzcie sily na Amon Gwareth",
         110,
     )
-    add_p1_objective(
+    safe_call(ui_p1_main.new_condition.destroy_object, unit_object=q_bldgs["caragdur_keep"]["ref_id"])
+    safe_call(ui_p1_main.new_condition.destroy_object, unit_object=q_bldgs["aqueduct_control"]["ref_id"])
+    safe_call(
+        ui_p1_main.new_condition.own_fewer_objects,
+        source_player=PlayerId.SEVEN,
+        object_list=ENEMY_GOTHMOG_ID,
+        quantity=0,
+    )
+
+    ui_p1_enclaves = add_p1_objective(
         "UI_P1_Dilemma_Enclaves",
         "[DYLEMAT ENKLAW] Kuznie (Zach: +3 Atk/+2 Panc) | Targ (Wsch: +12 Gwardii) | Harfa (Pld: +Jazda/Mnisi)",
         108,
     )
+    safe_call(
+        ui_p1_enclaves.new_condition.objects_in_area,
+        source_player=PlayerId.ONE,
+        object_list=TORCH_ID,
+        area_x1=2,
+        area_y1=166,
+        area_x2=2,
+        area_y2=166,
+        quantity=1,
+    )
+
     ui_q_caragdur = add_p1_objective(
         "UI_P1_Q_Caragdur",
         "[CO-OP P1+P4] Caragdur: P1 przebija brame od pld., P4 chroni Earendila przed Maeglinem (P8)",
         105,
     )
+    safe_call(ui_q_caragdur.new_condition.destroy_object, unit_object=q_bldgs["caragdur_keep"]["ref_id"])
+
     ui_q_aqueduct = add_p1_objective(
         "UI_P1_Q_Aqueduct",
         "[CO-OP P2->P3] Akwedukt: P2 niszczy Sluzy (P8) na wschodzie, by ugasic pozary u P3 i zalac fose",
         104,
     )
+    safe_call(ui_q_aqueduct.new_condition.destroy_object, unit_object=q_bldgs["aqueduct_control"]["ref_id"])
+
+    sx1, sy1, sx2, sy2 = sectors["tower_of_snow"]
     ui_q_snow = add_p1_objective(
         "UI_P1_Q_SnowTower",
         "[P3 - Duilin] Wieza ze Sniegu: Wejdz Duilinem na baszte na polnocy, by odslonic mape i zyskac +1 Zasiegu",
         102,
     )
+    safe_call(
+        ui_q_snow.new_condition.objects_in_area,
+        source_player=PlayerId.THREE,
+        object_list=HERO_DUILIN_ID,
+        area_x1=sx1,
+        area_y1=sy1,
+        area_x2=sx2,
+        area_y2=sy2,
+        quantity=1,
+    )
+
+    rf_x1, rf_y1, rf_x2, rf_y2 = sectors["royal_fountain"]
     ui_q_trees = add_p1_objective(
         "UI_P1_Q_SacredTrees",
         "[P4 - Idril] Drzewa Glingal i Belthil: Zabezpiecz pedy na Amon Gwareth (+60 HP Bohaterow)",
         101,
+    )
+    safe_call(
+        ui_q_trees.new_condition.objects_in_area,
+        source_player=PlayerId.FOUR,
+        object_list=HERO_IDRIL_ID,
+        area_x1=rf_x1,
+        area_y1=rf_y1,
+        area_x2=rf_x2,
+        area_y2=rf_y2,
+        quantity=1,
     )
 
     # Q1 [Co-op P1 + P4]: Betrayal of Maeglin at Caragdur
@@ -795,10 +877,6 @@ def _setup_phase1_city_and_dilemmas(tm: Any, ctx: dict[str, Any]) -> list[Any]:
         t_kill_maeglin.new_condition.destroy_object,
         unit_object=q_bldgs["caragdur_keep"]["ref_id"],
     )
-    safe_call(
-        t_kill_maeglin.new_effect.deactivate_trigger,
-        trigger_id=ui_q_caragdur.trigger_id,
-    )
     for p_id in (PlayerId.ONE, PlayerId.FOUR):
         for u_id in PLAYER_MELEE_RETINUE:
             safe_call(
@@ -836,10 +914,6 @@ def _setup_phase1_city_and_dilemmas(tm: Any, ctx: dict[str, Any]) -> list[Any]:
     safe_call(
         t_aqueduct_done.new_condition.destroy_object,
         unit_object=q_bldgs["aqueduct_control"]["ref_id"],
-    )
-    safe_call(
-        t_aqueduct_done.new_effect.deactivate_trigger,
-        trigger_id=ui_q_aqueduct.trigger_id,
     )
     safe_call(
         t_aqueduct_done.new_effect.deactivate_trigger,
@@ -887,10 +961,6 @@ def _setup_phase1_city_and_dilemmas(tm: Any, ctx: dict[str, Any]) -> list[Any]:
         area_y2=sy2,
         quantity=1,
     )
-    safe_call(
-        t_snow_tower.new_effect.deactivate_trigger,
-        trigger_id=ui_q_snow.trigger_id,
-    )
     for rx, ry in [(61, 108), (94, 63), (24, 63), (92, 26)]:
         spawn_progressive_revealer(t_snow_tower, rx, ry, player=PlayerId.ONE)
     for p_id in (PlayerId.TWO, PlayerId.THREE):
@@ -933,10 +1003,6 @@ def _setup_phase1_city_and_dilemmas(tm: Any, ctx: dict[str, Any]) -> list[Any]:
         area_x2=rf_x2,
         area_y2=rf_y2,
         quantity=1,
-    )
-    safe_call(
-        t_sacred_trees.new_effect.deactivate_trigger,
-        trigger_id=ui_q_trees.trigger_id,
     )
     for h_id, h_cfg in BALANCE["heroes"].items():
         safe_call(
@@ -1185,38 +1251,67 @@ def _setup_phase2_gothmog_and_tumladen(
 
     def add_p2_objective(name: str, text: str, order: int) -> Any:
         trig = tm.add_trigger(name=name, enabled=False, looping=False)
-        safe_call(trig.new_condition.timer, timer=999999)
         trig.short_description = text
         trig.display_on_screen = 1
         trig.description_order = order
         phase2_ui_triggers.append(trig)
         return trig
 
-    add_p2_objective(
+    og_x1, og_y1, og_x2, og_y2 = sectors["orfalch_gathering"]
+    ui_p2_main = add_p2_objective(
         "UI_P2_Main",
         "[FAZA II - ODWROT] Przebijcie sie przez Rownine Tumladen do wejscia w wawoz Orfalch Echor (185, 85)",
         110,
     )
+    safe_call(
+        ui_p2_main.new_condition.objects_in_area,
+        source_player=PlayerId.ONE,
+        object_type=OBJECT_TYPE_MILITARY,
+        area_x1=og_x1,
+        area_y1=og_y1,
+        area_x2=og_x2,
+        area_y2=og_y2,
+        quantity=3,
+    )
+
     ui_p2_dilemma = add_p2_objective(
         "UI_P2_Dilemma_Routes",
         "[WYBOR DROGI (Mozna isc razem lub 2+2)] DOL: Tunel Idril i Suche Koryto (Podkopy P4) | GORA: Rownina (Klify i Oltarz P7)",
         109,
     )
+    safe_call(
+        ui_p2_dilemma.new_condition.objects_in_area,
+        source_player=PlayerId.ONE,
+        object_list=TORCH_ID,
+        area_x1=2,
+        area_y1=166,
+        area_x2=2,
+        area_y2=166,
+        quantity=1,
+    )
+
     ui_p2_lower = add_p2_objective(
         "UI_P2_Q_LowerMines",
         "[SZLAK DOLNY - P4] Podkopy w Korycie Rzeki: Wysadz komory pod obozami wilkow, by pomoc idacym gora",
         105,
     )
+    safe_call(ui_p2_lower.new_condition.destroy_object, unit_object=q_bldgs["wolf_camp_1"]["ref_id"])
+    safe_call(ui_p2_lower.new_condition.destroy_object, unit_object=q_bldgs["wolf_camp_2"]["ref_id"])
+
     ui_p2_upper = add_p2_objective(
         "UI_P2_Q_UpperCliffs",
         "[SZLAK GORNY - P2/P3] Skarpy nad Rzeka: Zniszcz 2 wieze lucznikow Orkow strzelajace w Koryto Rzeki",
         104,
     )
+    safe_call(ui_p2_upper.new_condition.destroy_object, unit_object=q_bldgs["cliff_tower_1"]["ref_id"])
+    safe_call(ui_p2_upper.new_condition.destroy_object, unit_object=q_bldgs["cliff_tower_2"]["ref_id"])
+
     ui_p2_rog = add_p2_objective(
         "UI_P2_Q_RogAltar",
         "[INDYWIDUALNY P1 - Rog] Ostatnia Szarza Domu Mlota: Zburz Polowy Oltarz Balrogow na polnocy Tumladen",
         102,
     )
+    safe_call(ui_p2_rog.new_condition.destroy_object, unit_object=q_bldgs["balrog_altar"]["ref_id"])
 
     # Defeating Gothmog (quantity=0 alive) transitions from Phase I to Phase II
     # and switches the active Seal respawn checkpoint from phase1 to phase2!
@@ -1367,11 +1462,6 @@ def _setup_phase2_gothmog_and_tumladen(
             area_y2=q_bldgs[camp_key]["y"] + 8,
             quantity=500,
         )
-        if idx == 2:
-            safe_call(
-                t_mine.new_effect.deactivate_trigger,
-                trigger_id=ui_p2_lower.trigger_id,
-            )
         award_glory_gold(
             t_mine,
             200,
@@ -1402,10 +1492,6 @@ def _setup_phase2_gothmog_and_tumladen(
         t_cliffs_cleared.new_condition.destroy_object,
         unit_object=q_bldgs["cliff_tower_2"]["ref_id"],
     )
-    safe_call(
-        t_cliffs_cleared.new_effect.deactivate_trigger,
-        trigger_id=ui_p2_upper.trigger_id,
-    )
     award_glory_gold(
         t_cliffs_cleared,
         BALANCE["glory_scores"]["side_quest_completed"],
@@ -1418,7 +1504,7 @@ def _setup_phase2_gothmog_and_tumladen(
         "Balrog_Altar_Tumladen",
         (ra_x1 - 6, ra_y1 - 6, ra_x2 + 6, ra_y2 + 6),
         (145, 110),
-        [(PlayerId.SEVEN, ENEMY_BALROG_BOSS_ID, 1, 145, 114), (PlayerId.FIVE, ENEMY_ORC_BRUTE_ID, 8, 145, 108)],
+        [(PlayerId.EIGHT, ENEMY_BALROG_BOSS_ID, 1, 145, 114), (PlayerId.FIVE, ENEMY_ORC_BRUTE_ID, 8, 145, 108)],
         [(PlayerId.EIGHT, ENEMY_BALROG_BOSS_ID, 1, 148, 114)],
         trigger_player=PlayerId.ONE,
         trigger_unit_id=HERO_ROG_ID,
@@ -1431,10 +1517,6 @@ def _setup_phase2_gothmog_and_tumladen(
     safe_call(
         t_altar_destroyed.new_condition.destroy_object,
         unit_object=q_bldgs["balrog_altar"]["ref_id"],
-    )
-    safe_call(
-        t_altar_destroyed.new_effect.deactivate_trigger,
-        trigger_id=ui_p2_rog.trigger_id,
     )
     safe_call(
         t_altar_destroyed.new_effect.modify_attribute,
@@ -1474,27 +1556,72 @@ def _setup_phase3_orfalch_and_cirith_victory(
 
     def add_p3_objective(name: str, text: str, order: int) -> Any:
         trig = tm.add_trigger(name=name, enabled=False, looping=False)
-        safe_call(trig.new_condition.timer, timer=999999)
         trig.short_description = text
         trig.display_on_screen = 1
         trig.description_order = order
         phase3_ui_triggers.append(trig)
         return trig
 
-    add_p3_objective(
+    sx1, sy1, sx2, sy2 = sectors["sirion_exit"]
+    ui_p3_main = add_p3_objective(
         "UI_P3_Main",
         "[FAZA III - CRISTHORN] Przebijcie sie przez Siedem Bram i ocalcie Tuora, Idril i Earendila w Dolinie Sirionu",
         110,
     )
+    safe_call(
+        ui_p3_main.new_condition.objects_in_area,
+        source_player=PlayerId.ONE,
+        object_list=HERO_TUOR_ID,
+        area_x1=sx1,
+        area_y1=sy1,
+        area_x2=sx2,
+        area_y2=sy2,
+        quantity=1,
+    )
+    safe_call(
+        ui_p3_main.new_condition.objects_in_area,
+        source_player=PlayerId.FOUR,
+        object_list=HERO_IDRIL_ID,
+        area_x1=sx1,
+        area_y1=sy1,
+        area_x2=sx2,
+        area_y2=sy2,
+        quantity=1,
+    )
+    safe_call(
+        ui_p3_main.new_condition.objects_in_area,
+        source_player=PlayerId.FOUR,
+        object_list=HERO_EARENDIL_ID,
+        area_x1=sx1,
+        area_y1=sy1,
+        area_x2=sx2,
+        area_y2=sy2,
+        quantity=1,
+    )
+
     ui_p3_winches = add_p3_objective(
         "UI_P3_Q_Winches",
         "[CO-OP GORA/DOL] Gorna Gran (P3/P4): Zniszcz Kolowroty Bram (3, 5, 7), by zrzucic lawiny na Orkow w dole",
         106,
     )
+    safe_call(ui_p3_winches.new_condition.destroy_object, unit_object=q_bldgs["winch_bronze"]["ref_id"])
+    safe_call(ui_p3_winches.new_condition.destroy_object, unit_object=q_bldgs["winch_silver"]["ref_id"])
+    safe_call(ui_p3_winches.new_condition.destroy_object, unit_object=q_bldgs["winch_steel"]["ref_id"])
+
     ui_p3_duel = add_p3_objective(
         "UI_P3_Q_GlorfindelDuel",
         "[FINAL - P3 Glorfindel] Cirith Thoronath (198, 198): Utrzymaj Wystep przez 25s lub poswiec sie w pojedynku z Balrogiem!",
         104,
+    )
+    safe_call(
+        ui_p3_duel.new_condition.objects_in_area,
+        source_player=PlayerId.ONE,
+        object_list=VULTURE_ID,
+        area_x1=190,
+        area_y1=180,
+        area_x2=200,
+        area_y2=225,
+        quantity=1,
     )
 
     og_x1, og_y1, og_x2, og_y2 = sectors["orfalch_gathering"]
@@ -1588,11 +1715,6 @@ def _setup_phase3_orfalch_and_cirith_victory(
             area_y2=gy + 7,
             quantity=600,
         )
-        if w_key == "winch_steel":
-            safe_call(
-                t_winch.new_effect.deactivate_trigger,
-                trigger_id=ui_p3_winches.trigger_id,
-            )
         award_glory_gold(
             t_winch,
             200,
@@ -1901,10 +2023,6 @@ def _setup_phase3_orfalch_and_cirith_victory(
     safe_call(
         t_thorondor.new_effect.remove_object,
         selected_object_ids=rocks["cirith_exit_rocks"],
-    )
-    safe_call(
-        t_thorondor.new_effect.deactivate_trigger,
-        trigger_id=ui_p3_duel.trigger_id,
     )
     award_glory_gold(
         t_thorondor,

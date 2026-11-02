@@ -222,6 +222,7 @@ class EffAPI:
         self,
         source_player: PlayerId = PlayerId.ONE,
         object_type: int = -1,
+        object_list_unit_id: int | None = None,
         area_x1: int = 0,
         area_y1: int = 0,
         area_x2: int = 0,
@@ -233,11 +234,29 @@ class EffAPI:
                 "heal_object",
                 source_player=source_player,
                 object_type=object_type,
+                object_list_unit_id=object_list_unit_id,
                 area_x1=area_x1,
                 area_y1=area_y1,
                 area_x2=area_x2,
                 area_y2=area_y2,
                 quantity=quantity,
+            )
+        )
+
+    def teleport_object(
+        self,
+        location_x: int = 0,
+        location_y: int = 0,
+        selected_object_ids: list[int] | None = None,
+        **kwargs: Any,
+    ) -> None:
+        self._t.effects.append(
+            EffRec(
+                "teleport_object",
+                location_x=location_x,
+                location_y=location_y,
+                selected_object_ids=selected_object_ids,
+                **kwargs,
             )
         )
 
@@ -399,9 +418,9 @@ class TriggerSimulator:
 
         for trig in self.triggers:
             tid = trig.trigger_id
-            if not self.enabled[tid] or not trig.conditions:
+            if not self.enabled[tid]:
                 continue
-            if all(self._eval_cond(tid, c) for c in trig.conditions):
+            if not trig.conditions or all(self._eval_cond(tid, c) for c in trig.conditions):
                 self.fired_log.append((self.time, trig.name))
                 if not trig.looping:
                     self.enabled[tid] = False
@@ -500,6 +519,7 @@ def run_stage_a_verification() -> None:
     """Execute all structural AND discrete-time behavioral tests for Stage A (Audit Items 15-19)."""
     trigs, ctx = build_full_scenario_triggers()
     by_name = {t.name: t for t in trigs}
+    assert len(trigs) == 334, f"Oczekiwano 334 triggerow, otrzymano {len(trigs)}"
 
     print("=" * 80)
     print(f"RAPORT TESTOW LOGICZNYCH I SYMULACYJNYCH ETAPU A (Triggery: {len(trigs)})")
@@ -771,6 +791,23 @@ def run_stage_a_verification() -> None:
     assert any(name == "P3_Finale_Thorondor_Eagles_Arrive" for _, name in sim_sac.fired_log)
     assert not sim_sac.enabled[by_name["P3_Finale_Thorondor_Hold25s"].trigger_id]
     print("[PASS 18] Final Glorfindela: opuszczenie Wystepu resetuje 25s timer; dopiero 25s ciaglego utrzymania (Path A) lub poswiecenie (Path B) wzywa Orly.")
+
+    # =========================================================================
+    # ITEM 20: OBJECTIVES UI (*display_on_screen = 1*) & STRIKETHROUGH INTEGRITY
+    # =========================================================================
+    ui_trigs = [t for t in trigs if getattr(t, "display_on_screen", 0) == 1]
+    assert len(ui_trigs) == 18, f"Oczekiwano 18 triggerow UI Objectives, znaleziono {len(ui_trigs)}"
+    for ut in ui_trigs:
+        assert len(ut.conditions) > 0, f"Trigger UI '{ut.name}' posiada pusta liste conditions (wykonalby sie w 0:00)!"
+        # Verify that no UI objective trigger uses a naive timer condition
+        for cond in ut.conditions:
+            assert cond.condition_type != "timer", f"Trigger UI '{ut.name}' posiada warunek timer zamiast warunku zakonczenia zadania!"
+
+    # Behavioral simulation: at t=0, none of the 18 UI triggers must fire or strike through spontaneously
+    sim_ui = TriggerSimulator(ui_trigs, [(PlayerId.ONE, HERO_TUOR_ID, 27, 27)])
+    sim_ui.step(0.5)
+    assert len(sim_ui.fired_log) == 0, f"Triggery UI wykonaly sie przedwczesnie na starcie: {sim_ui.fired_log}"
+    print("[PASS 20] Weryfikacja 18 triggerow panelu Objectives (display_on_screen=1): brak pustych warunkow, brak timer=999999, 0 wykonan w 0:00.")
     print("=" * 80)
 
 

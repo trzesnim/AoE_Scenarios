@@ -807,10 +807,17 @@ def check_ui_and_area_damage_safety(scenario: Any) -> list[str]:
     area_dmg_kill_ids = frozenset({int(EffectId.DAMAGE_OBJECT), int(EffectId.KILL_OBJECT)})
     for t_idx, trig in enumerate(scenario.trigger_manager.triggers):
         t_lbl = _trigger_label(t_idx, trig)
-        if int(getattr(trig, "display_on_screen", 0)) == 1 and len(trig.conditions) == 0:
-            errors.append(
-                f"[{t_lbl}]: Baner UI (display_on_screen=1) ma 0 warunkow -> natychmiastowe wykonanie i skreslenie w 0:00!"
-            )
+        if int(getattr(trig, "display_on_screen", 0)) == 1:
+            if len(trig.conditions) == 0:
+                errors.append(
+                    f"[{t_lbl}]: Baner UI (display_on_screen=1) ma 0 warunkow -> natychmiastowe wykonanie i skreslenie w 0:00!"
+                )
+            for c_idx, cond in enumerate(trig.conditions):
+                if int(cond.condition_type) == int(ConditionId.TIMER) and getattr(cond, "timer", 0) >= 900000:
+                    errors.append(
+                        f"[{t_lbl}, Condition #{c_idx}]: Baner UI (display_on_screen=1) posiada atrapowy timer=999999 "
+                        f"zamiast warunku ukonczenia zadania lub blokera stanu!"
+                    )
 
         ordered, _ = _ordered_effects(trig)
         for pos, eff_idx, eff in ordered:

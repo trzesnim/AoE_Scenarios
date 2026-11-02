@@ -172,22 +172,21 @@ def run_stage_b_tests() -> None:
     )
     blocked_0s: set[tuple[int, int]] = set()
     passable_gate_ids = {gondolin_config.CITY_GATE_SW_NE_ID, gondolin_config.CITY_GATE_NW_SE_ID}
+    # Use exact footprints recorded directly in SafeMapGrid instead of manual ID table
+    for fp_rec in grid.placed_footprints:
+        if fp_rec.get("is_gate"):
+            continue
+        uid = fp_rec["unit_id"]
+        if uid in mobile_unit_ids or uid in passable_gate_ids:
+            continue
+        for ty in range(fp_rec["ymin"], fp_rec["ymax"] + 1):
+            for tx in range(fp_rec["xmin"], fp_rec["xmax"] + 1):
+                blocked_0s.add((tx, ty))
+
+    # Add trees and nature obstacles placed during forest generation
     for u in placed_units:
-        if u.unit_const not in mobile_unit_ids and u.unit_const not in passable_gate_ids:
-            # Find footprint if registered in quest_buildings or standard wall/tower
-            fp = 1
-            if u.unit_const in (234, 235, 598, 626, 70):
-                fp = 2
-            elif u.unit_const in (12, 87, 101, 103, 104):
-                fp = 3
-            elif u.unit_const in (49, 82, 84, 209, 1251):
-                fp = 4
-            cx = round(u.x - 0.5) if fp % 2 == 1 else round(u.x - 1.0)
-            cy = round(u.y - 0.5) if fp % 2 == 1 else round(u.y - 1.0)
-            x1, y1, x2, y2 = footprint_bounds(cx, cy, fp)
-            for ty in range(y1, y2 + 1):
-                for tx in range(x1, x2 + 1):
-                    blocked_0s.add((tx, ty))
+        if u.unit_const in (OAK_TREE_ID, PINE_TREE_ID, gondolin_config.CYPRESS_TREE_ID, gondolin_config.OLIVE_TREE_ID):
+            blocked_0s.add((int(u.x), int(u.y)))
 
     # 3. Negative BFS Tests at 0:00 (Blockades MUST block passage before triggers remove them!)
     # The siege perimeter now lies at X=121 / Y=134, so Tumladen entry goals sit just beyond it (X=130).
@@ -198,6 +197,13 @@ def run_stage_b_tests() -> None:
     assert not bfs_reachable(blocked_0s, (61, 56), (61, 140)), "North siege perimeter (Y=134) leaks at 0:00!"
     assert not bfs_reachable(blocked_0s, (184, 84), (198, 198)), "orfalch_gates failed to block Cirith Thoronath at 0:00!"
     assert not bfs_reachable(blocked_0s, (198, 198), (224, 224)), "cirith_exit_rocks failed to block Sirion Exit at 0:00!"
+
+    # Synthetic negative obstacle tests (walling an avenue / bottleneck blocks pathfinding)
+    test_blocked_south = set(blocked_0s)
+    for sx in range(20, 101):
+        for sy in range(35, 38):
+            test_blocked_south.add((sx, sy))
+    assert not bfs_reachable(test_blocked_south, (61, 61), (61, 24)), "Negatywny test BFS: zablokowana Aleja Poludniowa powinna odciac Amon Gwareth od Bramy Poludniowej!"
 
     # 4. Positive BFS Tests at 0:00 (All open city avenues & enclaves reachable from Amon Gwareth!)
     for name, target in [
@@ -229,11 +235,34 @@ def run_stage_b_tests() -> None:
     assert bfs_reachable(blocked_p2, lower_goal, (184, 84)), "Lower Route cannot reach Orfalch Echor (184,84)!"
     assert bfs_reachable(blocked_p2, upper_goal, (184, 84)), "Upper Route cannot reach Orfalch Echor (184,84)!"
 
-    blocked_p3 = set(blocked_p2)
-    for g_idx in range(1, 8):
-        unblock_rock_group(blocked_p3, f"orfalch_gate_{g_idx}")
-    assert bfs_reachable(blocked_p3, (184, 84), (198, 198)), "Cannot reach Cirith Thoronath Duel Spur (198,198)!"
+    # Synthetic negative test for canyon bottleneck
+    test_blocked_canyon = set(blocked_p2)
+    for cx in range(183, 187):
+        for cy in range(83, 87):
+            test_blocked_canyon.add((cx, cy))
+    assert not bfs_reachable(test_blocked_canyon, lower_goal, (184, 84)), "Negatywny test BFS: zablokowany waski przesmyk kanionu powinien odciac wejscie!"
 
+    # 6. Sequential 7-Gate Orfalch Echor BFS (opening orfalch_gate_1 through 7 one by one)
+    gate_checkpoints = [
+        (1, (194, 101)),
+        (2, (202, 115)),
+        (3, (207, 130)),
+        (4, (205, 144)),
+        (5, (199, 156)),
+        (6, (193, 168)),
+        (7, (198, 198)),
+    ]
+    blocked_gates_sim = set(blocked_p2)
+    assert not bfs_reachable(blocked_gates_sim, (184, 84), gate_checkpoints[0][1]), "Brama 1 (Wood) przepuszcza przed otwarciem!"
+
+    for g_idx, chk in gate_checkpoints:
+        unblock_rock_group(blocked_gates_sim, f"orfalch_gate_{g_idx}")
+        assert bfs_reachable(blocked_gates_sim, (184, 84), chk), f"Nie mozna dotrzec do punktu za Brama {g_idx} po jej otwarciu!"
+        if g_idx < 7:
+            next_chk = gate_checkpoints[g_idx][1]
+            assert not bfs_reachable(blocked_gates_sim, (184, 84), next_chk), f"Kolejna Brama {g_idx+1} przepuszcza przedwczesnie!"
+
+    blocked_p3 = blocked_gates_sim
     unblock_rock_group(blocked_p3, "cirith_exit_rocks")
     assert bfs_reachable(blocked_p3, (198, 198), (224, 224)), "Cannot reach Vale of Sirion Victory Exit (224,224)!"
 

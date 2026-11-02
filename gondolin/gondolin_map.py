@@ -1102,8 +1102,6 @@ def build_map_and_entities(scenario: Any) -> dict[str, Any]:
         grid.place_unit_safe(um, PlayerId.GAIA, prop_id, px, py, footprint=1, strict=True)
 
     grid.place_unit_safe(um, PlayerId.SEVEN, CASTLE_ID, 145, 119, footprint=4, respect_roads=False, strict=True)
-    place_near(PlayerId.SEVEN, ENEMY_BALROG_BOSS_ID, 145, 108, max_radius=3)
-    place_near(PlayerId.SEVEN, ENEMY_BALROG_BOSS_ID, 184, 173, max_radius=3)
 
     # P8 Maeglin's traitor barracks inside the sealed Caragdur enclave (Corridor X=23..29 stays free)
     grid.place_unit_safe(um, PlayerId.EIGHT, BARRACKS_ID, 36, 41, footprint=3, respect_roads=True, strict=True)
