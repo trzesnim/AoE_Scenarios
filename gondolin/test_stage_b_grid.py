@@ -193,6 +193,7 @@ def run_stage_b_tests() -> None:
     # The siege perimeter now lies at X=121 / Y=134, so Tumladen entry goals sit just beyond it (X=130).
     lower_goal, upper_goal = (130, 40), (130, 88)
     assert not bfs_reachable(blocked_0s, (61, 24), (28, 28)), "caragdur_blockade failed to block P1->P4 at 0:00!"
+    assert not bfs_reachable(blocked_0s, (28, 28), (36, 41)), "P4 base (28, 28) can reach Caragdur (36, 41) at 0:00!"
     assert not bfs_reachable(blocked_0s, (61, 56), lower_goal), "tumladen_exit_rocks failed to block Lower Route at 0:00!"
     assert not bfs_reachable(blocked_0s, (61, 56), upper_goal), "tumladen_exit_rocks failed to block Upper Route at 0:00!"
     assert not bfs_reachable(blocked_0s, (61, 56), (61, 140)), "North siege perimeter (Y=134) leaks at 0:00!"
@@ -219,8 +220,10 @@ def run_stage_b_tests() -> None:
 
     blocked_p1_breach = set(blocked_0s)
     unblock_rock_group(blocked_p1_breach, "caragdur_blockade")
+    unblock_rock_group(blocked_p1_breach, "caragdur_rocks")
     assert bfs_reachable(blocked_p1_breach, (61, 24), (28, 28)), "P1 still cannot reach P4 after breaching Caragdur!"
     assert bfs_reachable(blocked_p1_breach, (28, 28), (18, 40)), "P1/P4 cannot reach Caragdur Keep (18,42)!"
+    assert bfs_reachable(blocked_p1_breach, (28, 28), (36, 41)), "P4 cannot reach Caragdur (36, 41) after unblocking caragdur_rocks!"
 
     blocked_p2 = set(blocked_p1_breach)
     unblock_rock_group(blocked_p2, "tumladen_exit_rocks")
@@ -246,7 +249,7 @@ def run_stage_b_tests() -> None:
     print(f"1. Odrzucone placementy (failed_placements) : {len(grid.failed_placements)} (0 kolizji!)")
     print(f"2. Laczna liczba obiektow na mapie          : {len(placed_units)}")
     print(f"3. Liczba drzew (budzet 3000..9000)         : {tree_count}")
-    print("4. Testy negatywne BFS w 0:00 (5/5 blokad)  : PASS (Caragdur, Tumladen, Orfalch, Sirion szczelne)")
+    print("4. Testy negatywne BFS w 0:00 (6/6 blokad)  : PASS (Caragdur, Tumladen, Orfalch, Sirion szczelne)")
     print("5. Testy pozytywne BFS w 0:00 i Fazach I-III: PASS (Wszystkie aleje, enklawy i szlaki drozne)")
     print(f"6. Wygenerowano podglad 2D mapy             : {preview_path.resolve()}")
     print("=" * 78)

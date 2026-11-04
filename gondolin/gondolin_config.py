@@ -73,6 +73,7 @@ ARMOR_CLASS_RAM: int = 17
 MAP_REVEALER_ID: int = 837
 FLARE_UNIT_ID: int = 112
 ROCK_CLIFF_ID: int = 623
+ROCK_FORMATION_ID: int = 623
 SEA_ROCKS_ID: int = 389
 FIRE_TOWER_ID: int = 190
 FLAME_EFFECT_ID: int = 304  # OtherInfo.BONFIRE (permanent fire; replaces 303 UnitInfo.SEAGULLS)
@@ -323,7 +324,7 @@ BALANCE: dict[str, Any] = {
     "soft_cap_dominance_threshold": 28,   # 15..28 -> Standard Pack; >= 29 military units -> Dominance Bonus
     "mid_encounter_escalation_delay": 20, # Seconds before checking if players crushed base wave
     "mid_encounter_military_min": 8,      # Minimum military units in sector to trigger Elite Ambush
-    "dragon_drop_interval_seconds": 32,   # Periodic Orc drop interval for P6 Iron Dragons
+    "dragon_drop_interval_seconds": 45,   # Periodic Orc drop interval for P6 Iron Dragons
     "dragon_drop_p5_pop_cap": 65,         # Pause P6 Orc drops if P5 already has > 65 military units alive
     "dragon_drop_zone_congestion_max": 10, # Pause local corridor drop if >= 10 P5 military units still crowd zone
     "sanctuary_harder_hp_add": 20,

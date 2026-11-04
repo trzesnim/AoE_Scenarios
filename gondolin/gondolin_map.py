@@ -55,6 +55,7 @@ from gondolin_config import (
     PAVILION_ID,
     PINE_TREE_ID,
     ROCK_CLIFF_ID,
+    ROCK_FORMATION_ID,
     SANCTUARY_KING_ID,
     SIEGE_WORKSHOP_ID,
     STABLE_ID,
@@ -679,9 +680,9 @@ def _build_gondolin_walls_and_districts(
         (PlayerId.ONE, HOUSE_ID, 53, 41, 2), (PlayerId.ONE, HOUSE_ID, 67, 41, 2),
         # 3. SW Quarter: House of the Tree & Wardens of the Secret Way (Idril & Galdor)
         (PlayerId.FOUR, BARRACKS_ID, 35, 19, 3), (PlayerId.FOUR, ARCHERY_RANGE_ID, 38, 35, 3),
-        (PlayerId.FOUR, MONASTERY_ID, 20, 33, 3), (PlayerId.FOUR, PAVILION_ID, 28, 19, 2),
+        (PlayerId.FOUR, MONASTERY_ID, 20, 28, 3, False), (PlayerId.FOUR, PAVILION_ID, 28, 19, 2),
         (PlayerId.FOUR, HOUSE_ID, 39, 19, 2), (PlayerId.FOUR, HOUSE_ID, 44, 34, 2),
-        (PlayerId.FOUR, HOUSE_ID, 44, 38, 2), (PlayerId.FOUR, HOUSE_ID, 31, 39, 2),
+        (PlayerId.FOUR, HOUSE_ID, 44, 31, 2), (PlayerId.FOUR, HOUSE_ID, 31, 23, 2, False),
         (PlayerId.FOUR, HOUSE_ID, 31, 19, 2),
         # 4. East Quarter: House of the Fountain & Heavenly Arch (Ecthelion & Egalmoth)
         (PlayerId.TWO, ARCHERY_RANGE_ID, 99, 84, 3), (PlayerId.TWO, BARRACKS_ID, 95, 84, 3),
@@ -711,8 +712,10 @@ def _build_gondolin_walls_and_districts(
         (PlayerId.TWO, HOUSE_ID, 36, 105, 2), (PlayerId.TWO, HOUSE_ID, 40, 90, 2),
         (PlayerId.TWO, HOUSE_ID, 28, 100, 2), (PlayerId.TWO, HOUSE_ID, 39, 100, 2),
     ]
-    for p_id, u_id, bx, by, fp in district_buildings:
-        place_bldg(p_id, u_id, bx, by, footprint=fp, respect_roads=True)
+    for b_item in district_buildings:
+        p_id, u_id, bx, by, fp = b_item[:5]
+        rr = b_item[5] if len(b_item) > 5 else True
+        place_bldg(p_id, u_id, bx, by, footprint=fp, respect_roads=rr)
 
     # Ornamental Colonnades, Statues, Banners, and Olive/Cypress Groves along Avenues & Plazas
     avenue_ornaments: list[tuple[int, int, int]] = [
@@ -780,6 +783,7 @@ def build_map_and_entities(scenario: Any) -> dict[str, Any]:
             tile.elevation = grid.elevation[ty][tx]
 
     destructible_rocks: dict[str, list[int]] = {
+        "caragdur_rocks": [],
         "caragdur_blockade": [],
         "north_fire_objects": [],
         "aqueduct_dry_rocks": [],
@@ -876,10 +880,18 @@ def build_map_and_entities(scenario: Any) -> dict[str, Any]:
 
     # SW Quarter: House of Tuor & Caragdur Precipice (P4 completely sealed off at 0:00 by P8 Maeglin's wall & blockade!)
     register_bldg("house_of_tuor", PlayerId.FOUR, KREPOST_ID, 20, 20, footprint=4)
-    register_bldg("caragdur_keep", PlayerId.EIGHT, KEEP_ID, 19, 41, footprint=2)
+    register_bldg("caragdur_keep", PlayerId.EIGHT, KEEP_ID, 20, 42, footprint=2)
     for wx in range(17, 43):
         if grid.can_place_footprint(wx, 44, footprint=1, respect_roads=False):
             grid.place_unit_safe(um, PlayerId.GAIA, FORTIFIED_WALL_ID, wx, 44, footprint=1, strict=True)
+    for wx in range(17, 43):
+        if 28 <= wx <= 31:
+            r_obj = grid.place_unit_safe(
+                um, PlayerId.GAIA, ROCK_FORMATION_ID, wx, 38, footprint=1, clear_trees_around=False, strict=True
+            )
+            destructible_rocks["caragdur_rocks"].append(r_obj.reference_id)
+        elif grid.can_place_footprint(wx, 38, footprint=1, respect_roads=False):
+            grid.place_unit_safe(um, PlayerId.GAIA, FORTIFIED_WALL_ID, wx, 38, footprint=1, strict=True)
     for by in range(17, 45):
         if 23 <= by <= 29:
             r_obj = grid.place_unit_safe(
@@ -1059,7 +1071,7 @@ def build_map_and_entities(scenario: Any) -> dict[str, Any]:
         for unit_id, count in retinues[p_id]:
             for _ in range(count):
                 dx = (offset_idx % 7) - 3
-                dy = (offset_idx // 7) + 2
+                dy = ((offset_idx // 7) - 2) if p_id == PlayerId.FOUR else ((offset_idx // 7) + 2)
                 place_near(p_id, unit_id, sx + dx, sy + dy)
                 offset_idx += 1
 
@@ -1103,6 +1115,7 @@ def build_map_and_entities(scenario: Any) -> dict[str, Any]:
     return {
         "grid": grid,
         "destructible_rocks": destructible_rocks,
+        "caragdur_rocks": destructible_rocks["caragdur_rocks"],
         "quest_buildings": quest_buildings,
         "refugee_groups": refugee_groups,
         "starts": starts,

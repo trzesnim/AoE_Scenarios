@@ -509,3 +509,43 @@ Wszystkie 4 główne zestawy testów przechodzą w 100% na zielono:
 - `pytest validate_scenario.py -v`: 10/10 PASS (100% testów CTD, braku zwłok/pocisków, bezpieczeństwa UI).
 - `test_stage_a_logic.py`: PASS (334 triggery, symulacje soft-cap, leasha, GraceCoRespawn, aur i celów UI).
 - `test_stage_b_grid.py`: PASS (0 kolizji budynków, 5/5 blokad szczelnych w 0:00, drożność tras BFS).
+
+---
+
+### Seria 9: Izolacja Caragdûr (0:00), korekta zewnętrznego spawnu machin (1:05) i odciążenie pathfindingu
+
+#### 1. Zidentyfikowane przyczyny problemów z playtestów:
+1. **Ostrzał w 0:00 i marsz P4 na koszary P8:**
+   - Brak południowego muru Caragdûr (mur P8 stał tylko na `Y = 44` i `X = 42`).
+   - Klasztor P4 na `(20, 33)` znajdował się w odległości 7.64 kafelka od `caragdur_keep` na `(19, 41)`, wewnątrz jej zasięgu ognia (8) przed rozbrojeniem w `0:01`.
+   - Jednostki startowe P4 widziały koszary P8 na `(36, 41)` i szły otwartym placem je atakować.
+2. **Spawn machin P6 wewnątrz murów w 1:05:**
+   - Machiny P6 spawnowały się na `(61, 108)` (za Murem Północnym `Y = 111`) oraz na `(98, 63)` (za Murem Wschodnim `X = 104`), czyli wewnątrz stref zrzutu `Z0` jeszcze przed przełamaniem bram miejskich.
+3. **Zawieszenia silnika (AppHangB1) w trakcie walki (~2:00–2:20):**
+   - Zbyt częste zrzuty orków (`32s`) generujące gwałtowny przyrost wywołań komend AI.
+   - Szeroki obszar źródłowy `attack_move` w pętli zrzutów obejmujący całe sektory alei.
+
+#### 2. Wdrożone modyfikacje:
+1. **Szczelne odcięcie enklawy Caragdûr w `0:00` (`gondolin_map.py` & `gondolin_quests.py`):**
+   - Wybudowano południowy mur obronny (`FORTIFIED_WALL_ID`, Gaia) wzdłuż linii `Y = 38` od `X = 17` do `X = 42`.
+   - Przejście `X = 28..31, Y = 38` zablokowano skałami `ROCK_FORMATION_ID` (`caragdur_rocks`), usuwanymi automatycznie (`remove_object`) w triggerze `P1_Spawn_Maeglin_Traitors` w `0:50`.
+   - Przesunięto `caragdur_keep` na `(20, 42)`.
+   - Przesunięto klasztor P4 na `(20, 28)`, domy P4 na `(31, 23)` i `(44, 31)`, a świtę P4 na `Y = 24..28` (`dy = (offset_idx // 7) - 2`).
+   - Minimalna odległość euklidesowa między wieżą P8 a jakimkolwiek obiektem P4 wynosi teraz $\ge 12.0$ kafelków (poza zasięgiem 8 i poza LOS 11).
+   - W `P1_Spawn_Maeglin_Traitors`: Maeglin spawnuje się na dziedzińcu Caragdûr na `(24, 40)`, a 6 zdrajców na unikalnych wolnych kafelkach `(22..25, 40..41)` (0 nakładających się pozycji, 0 kolizji z murem).
+2. **Korekta pozycji szturmu w 1:05 (`gondolin_mechanics.py`):**
+   - W `P6_Spawn_Iron_Dragons_Phase1` machiny P6 przesunięto na zewnątrz murów:
+     * Północ: taran na `(61, 122)`, smoki ogniste na `(59, 122)` i `(63, 122)` na wolnych kafelkach przed Bramą Północną (`Y = 122 > 111`), z rozkazem `attack_move` do wnętrza alei `(61, 78)`.
+     * Wschód: taran na `(111, 63)`, smok ognisty na `(111, 61)` na wolnych kafelkach przed Bramą Wschodnią (`X = 111 > 104`), z rozkazem `attack_move` do alei `(76, 63)`.
+3. **Odciążenie pathfindingu podczas walki (`gondolin_config.py` & `gondolin_mechanics.py`):**
+   - Zwiększono interwał zrzutu orków `dragon_drop_interval_seconds` z 32s do 45s.
+   - W `t_drop.new_effect.attack_move` ograniczono obszar źródłowy ściśle do lokalnej siatki spawnu `(cx - 2, cy - 2, cx + 2, cy + 2)`.
+4. **Rozbudowa suity testowej (`test_stage_b_grid.py`):**
+   - Dodano test negatywny BFS w `0:00`: brak przejścia z bazy P4 `(28, 28)` do Caragdûr `(36, 41)`.
+   - Dodano test pozytywny BFS po `0:50`: przejście z `(28, 28)` do `(36, 41)` zostaje w pełni odblokowane po usunięciu `caragdur_rocks`.
+
+#### 3. Raport z weryfikacji:
+- `generate_gondolin_scenario.py`: PASS (334 triggery, 0 odrzuconych placementów, scenariusz zapisany i zwalidowany).
+- `pytest validate_scenario.py -v`: 10/10 PASS (100%).
+- `test_stage_a_logic.py`: PASS (100%).
+- `test_stage_b_grid.py`: PASS (6/6 blokad szczelnych w 0:00, pełna drożność we wszystkich fazach).

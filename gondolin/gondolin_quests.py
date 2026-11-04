@@ -810,19 +810,24 @@ def _setup_phase1_city_and_dilemmas(tm: Any, ctx: dict[str, Any]) -> list[Any]:
     )
     safe_call(t_spawn_maeglin.new_condition.timer, timer=50)
     safe_call(
+        t_spawn_maeglin.new_effect.remove_object,
+        selected_object_ids=rocks["caragdur_rocks"],
+    )
+    safe_call(
         t_spawn_maeglin.new_effect.create_object,
         source_player=PlayerId.EIGHT,
         object_list_unit_id=ENEMY_MAEGLIN_ID,
-        location_x=22,
-        location_y=38,
+        location_x=24,
+        location_y=40,
     )
-    for i in range(6):
+    mole_traitor_spawns = [(22, 40), (23, 40), (25, 40), (22, 41), (23, 41), (24, 41)]
+    for i, (mx, my) in enumerate(mole_traitor_spawns):
         safe_call(
             t_spawn_maeglin.new_effect.create_object,
             source_player=PlayerId.EIGHT,
             object_list_unit_id=ENEMY_MOLE_TRAITOR_ID if i % 2 == 0 else ENEMY_MOLE_PIKE_ID,
-            location_x=20 + (i % 3),
-            location_y=39 + (i // 3),
+            location_x=mx,
+            location_y=my,
         )
     for m_id in (ENEMY_MAEGLIN_ID, ENEMY_MOLE_TRAITOR_ID, ENEMY_MOLE_PIKE_ID):
         apply_unit_lore_name(t_spawn_maeglin, PlayerId.EIGHT, m_id)
@@ -831,9 +836,9 @@ def _setup_phase1_city_and_dilemmas(tm: Any, ctx: dict[str, Any]) -> list[Any]:
             source_player=PlayerId.EIGHT,
             object_list_unit_id=m_id,
             area_x1=17,
-            area_y1=36,
-            area_x2=30,
-            area_y2=43,
+            area_y1=38,
+            area_x2=42,
+            area_y2=44,
             location_x=27,
             location_y=27,
         )

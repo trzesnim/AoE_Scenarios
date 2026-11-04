@@ -1322,11 +1322,11 @@ def _setup_iron_dragon_corridor_spawners(tm: Any, ctx: dict[str, Any]) -> None:
     safe_call(t_spawn_dragons.new_condition.timer, timer=65)  # 1:05 main siege assault (calm opening until then)
 
     dragon_spawns: list[tuple[int, int, int, int, int]] = [
-        (ENEMY_IRON_DRAGON_RAM_ID, 61, 108, 61, 78),
-        (ENEMY_FIRE_DRAKE_ID, 59, 108, 61, 78),
-        (ENEMY_FIRE_DRAKE_ID, 63, 108, 61, 78),
-        (ENEMY_IRON_DRAGON_RAM_ID, 98, 63, 76, 63),
-        (ENEMY_FIRE_DRAKE_ID, 98, 61, 76, 63),
+        (ENEMY_IRON_DRAGON_RAM_ID, 61, 122, 61, 78),
+        (ENEMY_FIRE_DRAKE_ID, 59, 122, 61, 78),
+        (ENEMY_FIRE_DRAKE_ID, 63, 122, 61, 78),
+        (ENEMY_IRON_DRAGON_RAM_ID, 111, 63, 76, 63),
+        (ENEMY_FIRE_DRAKE_ID, 111, 61, 76, 63),
     ]
     for u_id, sx, sy, tx, ty in dragon_spawns:
         safe_call(
@@ -1543,10 +1543,10 @@ def _setup_iron_dragon_corridor_spawners(tm: Any, ctx: dict[str, Any]) -> None:
             safe_call(
                 t_drop.new_effect.attack_move,
                 source_player=PlayerId.FIVE,
-                area_x1=zx1,
-                area_y1=zy1,
-                area_x2=zx2,
-                area_y2=zy2,
+                area_x1=cx - 2,
+                area_y1=cy - 2,
+                area_x2=cx + 2,
+                area_y2=cy + 2,
                 location_x=61,
                 location_y=63,
             )
