@@ -352,8 +352,8 @@ def create_escalating_encounter(
     for ai_p, unit_id, count, sx, sy in base_spawns:
         spawned_types_base.add((ai_p, unit_id))
         for i in range(count):
-            ox = sx + (i % 4) - 1
-            oy = sy + (i // 4) - 1
+            ox = sx + (i % 4)
+            oy = sy + (i // 4)
             safe_call(
                 t_base.new_effect.create_object,
                 source_player=ai_p,
@@ -396,10 +396,10 @@ def create_escalating_encounter(
         t_elite.new_condition.objects_in_area,
         source_player=trigger_player,
         object_type=OBJECT_TYPE_MILITARY,
-        area_x1=max(0, x1 - 8),
-        area_y1=max(0, y1 - 8),
-        area_x2=min(239, x2 + 8),
-        area_y2=min(239, y2 + 8),
+        area_x1=max(86, x1 - 4) if x1 >= 86 else max(0, x1 - 4),
+        area_y1=max(0, y1 - 4),
+        area_x2=min(239, x2 + 4),
+        area_y2=min(239, y2 + 4),
         quantity=BALANCE["mid_encounter_military_min"],
     )
 
@@ -407,8 +407,8 @@ def create_escalating_encounter(
     for ai_p, unit_id, count, sx, sy in elite_spawns:
         spawned_types_elite.add((ai_p, unit_id))
         for i in range(count):
-            ox = sx + (i % 4) - 1
-            oy = sy + (i // 4) - 1
+            ox = sx + (i % 4)
+            oy = sy + (i // 4)
             safe_call(
                 t_elite.new_effect.create_object,
                 source_player=ai_p,
@@ -438,26 +438,38 @@ def create_escalating_encounter(
     )
 
     # 3. Camp Leash trigger keeping Elite Ambush units engaged around target_xy
-    rx1 = max(0, min(x1, tx) - 24)
-    ry1 = max(0, min(y1, ty) - 24)
-    rx2 = min(239, max(x2, tx) + 24)
-    ry2 = min(239, max(y2, ty) + 24)
+    # Bounded strictly to local sector / city limits (never outside city walls X=104 nor into closed rocks)
+    if max(x2, tx) <= 104:
+        leash_x1 = max(18, min(x1, tx) - 5)
+        leash_y1 = max(18, min(y1, ty) - 5)
+        leash_x2 = min(102, max(x2, tx) + 5)
+        leash_y2 = min(108, max(y2, ty) + 5)
+    else:
+        leash_x1 = max(0, min(x1, tx) - 5)
+        leash_y1 = max(0, min(y1, ty) - 5)
+        leash_x2 = min(239, max(x2, tx) + 5)
+        leash_y2 = min(239, max(y2, ty) + 5)
+
+    rx1 = leash_x1
+    ry1 = leash_y1
+    rx2 = leash_x2
+    ry2 = leash_y2
 
     t_elite_leash = tm.add_trigger(
         name=f"Enc_{name_prefix}_EliteLeash",
         enabled=False,
         looping=True,
     )
-    safe_call(t_elite_leash.new_condition.timer, timer=6)
+    safe_call(t_elite_leash.new_condition.timer, timer=20)
     for ai_p, unit_id in sorted(spawned_types_elite, key=lambda item: (item[0].value, item[1])):
         safe_call(
             t_elite_leash.new_effect.attack_move,
             source_player=ai_p,
             object_list_unit_id=unit_id,
-            area_x1=max(0, rx1 - 15),
-            area_y1=max(0, ry1 - 15),
-            area_x2=min(239, rx2 + 15),
-            area_y2=min(239, ry2 + 15),
+            area_x1=leash_x1,
+            area_y1=leash_y1,
+            area_x2=leash_x2,
+            area_y2=leash_y2,
             location_x=tx,
             location_y=ty,
         )
@@ -1336,7 +1348,93 @@ def _setup_iron_dragon_corridor_spawners(tm: Any, ctx: dict[str, Any]) -> None:
             location_y=ty,
         )
     apply_unit_lore_name(t_spawn_dragons, PlayerId.SIX, ENEMY_IRON_DRAGON_RAM_ID)
+    apply_unit_lore_name(t_spawn_dragons, PlayerId.SIX, ENEMY_IRON_DRAGON_RAM_ID)
     apply_unit_lore_name(t_spawn_dragons, PlayerId.SIX, ENEMY_FIRE_DRAKE_ID)
+
+    # Accompanying P5 infantry assault at 1:05 outside North and East Gates
+    north_assault_infantry = [(58, 126), (59, 126), (60, 126), (62, 126), (63, 126), (64, 126)]
+    north_assault_crossbow = [(58, 127), (59, 127), (63, 127), (64, 127)]
+    for ox, oy in north_assault_infantry:
+        safe_call(
+            t_spawn_dragons.new_effect.create_object,
+            source_player=PlayerId.FIVE,
+            object_list_unit_id=ENEMY_ORC_INFANTRY_ID,
+            location_x=ox,
+            location_y=oy,
+        )
+    for ox, oy in north_assault_crossbow:
+        safe_call(
+            t_spawn_dragons.new_effect.create_object,
+            source_player=PlayerId.FIVE,
+            object_list_unit_id=ENEMY_ORC_CROSSBOW_ID,
+            location_x=ox,
+            location_y=oy,
+        )
+    safe_call(
+        t_spawn_dragons.new_effect.attack_move,
+        source_player=PlayerId.FIVE,
+        object_list_unit_id=ENEMY_ORC_INFANTRY_ID,
+        area_x1=56,
+        area_y1=125,
+        area_x2=66,
+        area_y2=130,
+        location_x=61,
+        location_y=78,
+    )
+    safe_call(
+        t_spawn_dragons.new_effect.attack_move,
+        source_player=PlayerId.FIVE,
+        object_list_unit_id=ENEMY_ORC_CROSSBOW_ID,
+        area_x1=56,
+        area_y1=125,
+        area_x2=66,
+        area_y2=130,
+        location_x=61,
+        location_y=78,
+    )
+
+    east_assault_infantry = [(114, 61), (114, 62), (114, 63), (114, 64), (114, 65), (115, 63)]
+    east_assault_crossbow = [(115, 61), (115, 62), (115, 64), (115, 65)]
+    for ox, oy in east_assault_infantry:
+        safe_call(
+            t_spawn_dragons.new_effect.create_object,
+            source_player=PlayerId.FIVE,
+            object_list_unit_id=ENEMY_ORC_INFANTRY_ID,
+            location_x=ox,
+            location_y=oy,
+        )
+    for ox, oy in east_assault_crossbow:
+        safe_call(
+            t_spawn_dragons.new_effect.create_object,
+            source_player=PlayerId.FIVE,
+            object_list_unit_id=ENEMY_ORC_CROSSBOW_ID,
+            location_x=ox,
+            location_y=oy,
+        )
+    safe_call(
+        t_spawn_dragons.new_effect.attack_move,
+        source_player=PlayerId.FIVE,
+        object_list_unit_id=ENEMY_ORC_INFANTRY_ID,
+        area_x1=112,
+        area_y1=59,
+        area_x2=116,
+        area_y2=67,
+        location_x=76,
+        location_y=63,
+    )
+    safe_call(
+        t_spawn_dragons.new_effect.attack_move,
+        source_player=PlayerId.FIVE,
+        object_list_unit_id=ENEMY_ORC_CROSSBOW_ID,
+        area_x1=112,
+        area_y1=59,
+        area_x2=116,
+        area_y2=67,
+        location_x=76,
+        location_y=63,
+    )
+    apply_unit_lore_name(t_spawn_dragons, PlayerId.FIVE, ENEMY_ORC_INFANTRY_ID)
+    apply_unit_lore_name(t_spawn_dragons, PlayerId.FIVE, ENEMY_ORC_CROSSBOW_ID)
 
     # At 1:05 the pre-placed siege camps (parked outside the walls since 0:00) march on Gondolin as well
     pre_placed_camps: list[tuple[PlayerId, int, tuple[int, int, int, int], tuple[int, int]]] = [
@@ -1415,28 +1513,30 @@ def _setup_iron_dragon_corridor_spawners(tm: Any, ctx: dict[str, Any]) -> None:
                 quantity=BALANCE["dragon_drop_zone_congestion_max"],
                 inverted=1,
             )
-            for i in range(5):
+            # 9 unique tiles in a 3x3 grid around (cx, cy)
+            grid_3x3 = [
+                (-1, -1), (0, -1), (1, -1),
+                (-1,  0), (0,  0), (1,  0),
+                (-1,  1), (0,  1), (1,  1),
+            ]
+            drop_composition: list[tuple[int, tuple[int, int]]] = [
+                (ENEMY_ORC_INFANTRY_ID, grid_3x3[0]),
+                (ENEMY_ORC_INFANTRY_ID, grid_3x3[1]),
+                (ENEMY_ORC_INFANTRY_ID, grid_3x3[2]),
+                (ENEMY_ORC_INFANTRY_ID, grid_3x3[3]),
+                (ENEMY_ORC_INFANTRY_ID, grid_3x3[4]),
+                (ENEMY_ORC_BRUTE_ID,    grid_3x3[5]),
+                (ENEMY_ORC_BRUTE_ID,    grid_3x3[6]),
+                (ENEMY_ORC_CROSSBOW_ID, grid_3x3[7]),
+                (ENEMY_ORC_CROSSBOW_ID, grid_3x3[8]),
+            ]
+            for u_id, (dx, dy) in drop_composition:
                 safe_call(
                     t_drop.new_effect.create_object,
                     source_player=PlayerId.FIVE,
-                    object_list_unit_id=ENEMY_ORC_INFANTRY_ID,
-                    location_x=cx + (i % 3) - 1,
-                    location_y=cy + (i // 3) - 1,
-                )
-            for i in range(2):
-                safe_call(
-                    t_drop.new_effect.create_object,
-                    source_player=PlayerId.FIVE,
-                    object_list_unit_id=ENEMY_ORC_BRUTE_ID,
-                    location_x=cx + i,
-                    location_y=cy + 1,
-                )
-                safe_call(
-                    t_drop.new_effect.create_object,
-                    source_player=PlayerId.FIVE,
-                    object_list_unit_id=ENEMY_ORC_CROSSBOW_ID,
-                    location_x=cx - i,
-                    location_y=cy - 1,
+                    object_list_unit_id=u_id,
+                    location_x=cx + dx,
+                    location_y=cy + dy,
                 )
             for u_id in (ENEMY_ORC_INFANTRY_ID, ENEMY_ORC_BRUTE_ID, ENEMY_ORC_CROSSBOW_ID):
                 apply_unit_lore_name(t_drop, PlayerId.FIVE, u_id)

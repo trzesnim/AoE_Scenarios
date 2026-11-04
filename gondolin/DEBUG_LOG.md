@@ -465,3 +465,47 @@ KOLEJNE ZADANIE DO WYKONANIA (ETAP 7 Z ROADMAP.md):
 4. Playtest w silniku gry AoE2: DE:
    - Weryfikacja zachowania w grze pod kątem płynności, braku desynchronizacji/crashy i czytelności przekreślanych zadań w UI.
 ```
+
+---
+
+### Seria 8: Diagnostyka i eliminacja zawieszeń pathfindingu `AppHangB1 (Sig[3] = 185d)` w 2:09 (#18) i 3:01 (#257)
+
+#### 1. Geneza i analiza problemu:
+W trakcie playtestów w trybie Host Game scenariusz przeszedł pomyślnie wszystkie punkty krytyczne do 2. minuty (brak alarmu wież w 0:00, palisady nie pękają w 0:27, zdrada w 0:50, smoki w 1:05), lecz napotkał zawieszenia silnika:
+- **Próba 1 (2:09, t = 129s):** ostatni komunikat `<AQUA>[DBG #18] P6_Dragon_Drop_east_avenue_Z0`
+- **Próba 2 (3:01, t = 181s):** ostatni komunikat `<AQUA>[DBG #257] Enc_East_Market_EliteLeash`
+
+Weryfikacja Windows Error Reporting (`Report.wer`) potwierdziła dla obu zdarzeń identyczny typ błędu:
+`EventType = AppHangB1`, `Sig[3] = 185d`, `Hang Type = 134217728`.
+Bezpośrednie przyczyny zawieszenia procedury pathfindingu w silniku AoE2: DE:
+1. **Kolizje geometryczne i duplikaty w `create_object`:**
+   - W `#18` (`P6_Dragon_Drop_east_avenue_Z0`) 9 jednostek spawnowało się na 7 kafelkach (podwójne jednostki na `(97, 62)` i `(98, 62)`), podczas gdy taran Żelaznego Smoka dopiero dotykał Bramy Wschodniej na `X = 104`.
+   - W `#257` (`Enc_East_Market`) Jeźdźcy Wargów spawnowali się od `(102, 64)`, a przy starym wzorze przesunięcia jednostki trafiały na `X = 104` wprost w bryłę Fortified Wall / Bramy Wschodniej.
+2. **Nieskończona pętla `EliteLeash` i gigantyczny obszar `attack_move`:**
+   - Trigger `#257` wysyłał rozkaz `attack_move` co 6 sekund na obszar `(49, 13)` do `(141, 111)` (9 016 kafelków!), wychodząc daleko poza mury miasta na zewnętrzne równiny i zamknięte skały.
+   - Pętla `t_elite_leash` nigdy nie była dezaktywowana przy przejściu fazy gry ani po opuszczeniu sektora.
+   - Wojska startowe Gracza 2 na `(80, 48)` przy szerokim filtrze sektora ryzykowały przedwczesne wzbudzenie zasadzki w 0:00.
+
+#### 2. Wdrożone naprawy:
+1. **Naprawa zrzutów Żelaznych Smoków (`P6_Dragon_Drop_*`) i szturmu w 1:05:**
+   - Rozłożono 9 jednostek zrzutu na unikalnych 9 kafelkach siatki 3x3 `(dx in -1..1, dy in -1..1)` wokół środka korytarza `(cx, cy)` — 0 duplikatów pozycji.
+   - Odsunięto strefy wyzwalania `Z0` od bram (`north_avenue_Z0` do `y2 = 109`, `east_avenue_Z0` do `x2 = 99`), dzięki czemu desant orków wewnątrz miasta aktywuje się dopiero po faktycznym sforsowaniu bramy przez machinę.
+   - W `P6_Spawn_Iron_Dragons_Phase1` (`t = 65s`) dodano towarzyszący szturm piechoty P5 przed Bramą Północną (6x piechota na `Y=126`, 4x kusznicy na `Y=127`) oraz Bramą Wschodnią (6x piechota na `X=114..115`, 4x kusznicy na `X=115`) na w 100% wolnych kafelkach z rozkazem `attack_move` w głąb Gondolinu.
+2. **Przebudowa `create_escalating_encounter` i `Enc_East_Market`:**
+   - Zwiększono interwał pętli `t_elite_leash` z 6s do 20s.
+   - Ograniczono obszar przeszukiwania `attack_move` w mieście ściśle do granic dzielnicy miejskiej (`X <= 102`, `Y <= 108`), uniemożliwiając wyszukiwanie celów poza murami.
+   - W `t_gothmog_slain` dodano automatyczną dezaktywację wszystkich pętli `_EliteLeash` z Fazy I.
+   - W `Enc_East_Market`: odsunięto punkty spawnu w głąb placu targowego (piechota na `(94, 64)`, kusznicy na `(94, 60)`, wilki na `(98, 62)`), z dala od muru `X=104` i garnizonu P2.
+   - Zawężono obszar wyzwalania `Enc_East_Market_Base` (`X >= 88`), co całkowicie eliminuje samoczynne wzbudzenie przez startowe wojska P2 na `(80, 48)` (max X wojsk P2 w 0:00 = 84).
+3. **Audyt i eliminacja kolizji `create_object` względem `SafeMapGrid`:**
+   - Wyeliminowano kolizje w `Aqueduct_Guard` (przesunięcie na `(84, 83)` z dala od koszar) oraz `Balrog_Altar_Tumladen` (odsunięcie spawnu z bryły ołtarza 4x4 na wolne kafelki `(142, 112)` i `(149, 112)`).
+   - Przesunięto punkty respawnu fazy 1 (`checkpoints["phase1"]`) Tuora/Roga na `(61, 51)` (dziedziniec Amon Gwareth, z dala od Bramy Północnej Cytadeli na `Y=48`) oraz odsunięto punkty od posągów Fontanny.
+   - Odsunięto spawn nagród grup uchodźców (`Rescue_ref_*`) od samych namiotów uchodźców.
+   - Rezultat audytu: 0 kolizji jednostek militarnych/bohaterów w całym scenariuszu.
+
+#### 3. Aktualny stan weryfikacji i testów:
+Wszystkie 4 główne zestawy testów przechodzą w 100% na zielono:
+- `generate_gondolin_scenario.py`: PASS (334 triggery, 0 błędów placementu, czysty zapis binarny).
+- `pytest validate_scenario.py -v`: 10/10 PASS (100% testów CTD, braku zwłok/pocisków, bezpieczeństwa UI).
+- `test_stage_a_logic.py`: PASS (334 triggery, symulacje soft-cap, leasha, GraceCoRespawn, aur i celów UI).
+- `test_stage_b_grid.py`: PASS (0 kolizji budynków, 5/5 blokad szczelnych w 0:00, drożność tras BFS).

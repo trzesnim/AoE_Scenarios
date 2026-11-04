@@ -1113,7 +1113,7 @@ def build_map_and_entities(scenario: Any) -> dict[str, Any]:
             "king_ref_id": sanctuary_king.reference_id,
         },
         "checkpoints": {
-            "phase1": {PlayerId.ONE: (61, 49), PlayerId.TWO: (66, 56), PlayerId.THREE: (61, 66), PlayerId.FOUR: (55, 56)},
+            "phase1": {PlayerId.ONE: (61, 51), PlayerId.TWO: (69, 54), PlayerId.THREE: (61, 66), PlayerId.FOUR: (53, 54)},
             "phase2": {PlayerId.ONE: (110, 86), PlayerId.TWO: (110, 40), PlayerId.THREE: (114, 86), PlayerId.FOUR: (114, 40)},
             "phase3": {PlayerId.ONE: (184, 84), PlayerId.TWO: (186, 84), PlayerId.THREE: (184, 88), PlayerId.FOUR: (186, 88)},
         },
@@ -1145,7 +1145,7 @@ def build_map_and_entities(scenario: Any) -> dict[str, Any]:
             "sirion_exit": (219, 216, 232, 230),
         },
         "dragon_corridors": {
-            "north_avenue": [(55, 102, 67, 114), (55, 88, 67, 101), (55, 76, 67, 87)],
-            "east_avenue": [(92, 57, 104, 69), (78, 57, 91, 69)],
+            "north_avenue": [(55, 102, 67, 109), (55, 88, 67, 101), (55, 76, 67, 87)],
+            "east_avenue": [(92, 57, 99, 69), (78, 57, 91, 69)],
         },
     }

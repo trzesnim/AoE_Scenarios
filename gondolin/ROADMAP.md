@@ -479,6 +479,8 @@ Każdy etap podlega trójpoziomowej weryfikacji:
    - Wdrożenie symulacji sekwencyjnego otwierania i niszczenia każdej z 7 bram wąwozu *Orfalch Echor* wraz z weryfikacją drożności ścieżek jednostek ucieczkowych.
 4. **Wyłączenie instrumentacji DEBUG_CHAT po pełnej stabilizacji:**
    - Wyczyszczenie triggerów z pomocniczych efektów Send Chat [DBG #...] po ostatecznym potwierdzeniu stabilności rozgrywki (0 crashy/hangów w pełnym playteście).
+5. **Rozbudowa i balans fal szturmowych Morgotha (liczniejsze grupy słabszych jednostek Orków P5 wspierające machiny P6 od 1:05, dające klimat masowego oblężenia):**
+   - Skalowanie liczebności piechoty i łuczników Orków w kolejnych fazach oblężenia (fale szturmowe przed Bramami Północną i Wschodnią oraz desanty machin P6 z zachowaniem limitów populacyjnych i płynności pathfindingu).
 
 
 - [x] **Weryfikacja pętli `looping = True` + `Timer`:** Zbadano empirycznie plikiem `Gondolin_A2B_T1_LoopTimerProbe5s`. Mechanizm działa poprawnie, wykonując akcje co 5 sekund. Hipoteza awarii silnika przez pętle czasowe ODRZUCONA.

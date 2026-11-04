@@ -696,8 +696,8 @@ def _setup_refugee_rescues(tm: Any, ctx: dict[str, Any]) -> None:
                 t_rescue.new_effect.create_object,
                 source_player=r_player,
                 object_list_unit_id=r_unit,
-                location_x=rx + (i % 3) - 1,
-                location_y=ry + (i // 3) - 1,
+                location_x=rx - 2 + (i % 2),
+                location_y=ry - 1 + (i // 2),
             )
         apply_unit_lore_name(t_rescue, r_player, r_unit)
         award_glory_gold(
@@ -906,7 +906,7 @@ def _setup_phase1_city_and_dilemmas(tm: Any, ctx: dict[str, Any]) -> list[Any]:
         (aq_x1 - 4, aq_y1 - 4, aq_x2 + 4, aq_y2 + 4),
         (88, 74),
         [(PlayerId.EIGHT, ENEMY_MOLE_TRAITOR_ID, 6, 86, 74)],
-        [(PlayerId.EIGHT, ENEMY_ORC_BRUTE_ID, 5, 86, 82)],
+        [(PlayerId.EIGHT, ENEMY_ORC_BRUTE_ID, 5, 84, 83)],
         trigger_player=PlayerId.TWO,
     )
 
@@ -1102,10 +1102,10 @@ def _setup_phase1_city_and_dilemmas(tm: Any, ctx: dict[str, Any]) -> list[Any]:
     t_mkt_base, _ = create_escalating_encounter(
         tm,
         "East_Market",
-        (mk_x1, mk_y1, mk_x2, mk_y2),
+        (max(88, mk_x1), 54, min(100, mk_x2), 70),
         (92, 63),
-        [(PlayerId.FIVE, ENEMY_ORC_INFANTRY_ID, 10, 98, 66), (PlayerId.FIVE, ENEMY_ORC_CROSSBOW_ID, 6, 100, 60)],
-        [(PlayerId.FIVE, ENEMY_WARG_RIDER_ID, 6, 102, 64)],
+        [(PlayerId.FIVE, ENEMY_ORC_INFANTRY_ID, 10, 94, 64), (PlayerId.FIVE, ENEMY_ORC_CROSSBOW_ID, 6, 94, 60)],
+        [(PlayerId.FIVE, ENEMY_WARG_RIDER_ID, 6, 98, 62)],
         trigger_player=PlayerId.TWO,
     )
     for i in range(6):
@@ -1340,6 +1340,9 @@ def _setup_phase2_gothmog_and_tumladen(
         safe_call(t_gothmog_slain.new_effect.deactivate_trigger, trigger_id=ctx["_all_seal_heal_stops"][st_idx]["phase1"].trigger_id)
     for drop_tid in ctx.get("dragon_drop_trigger_ids", []):
         safe_call(t_gothmog_slain.new_effect.deactivate_trigger, trigger_id=drop_tid)
+    for trig_item in tm.triggers:
+        if trig_item.name.endswith("_EliteLeash") and trig_item.trigger_id < t_gothmog_slain.trigger_id:
+            safe_call(t_gothmog_slain.new_effect.deactivate_trigger, trigger_id=trig_item.trigger_id)
 
     for old_ui in phase1_ui_triggers:
         safe_call(
@@ -1508,8 +1511,8 @@ def _setup_phase2_gothmog_and_tumladen(
         "Balrog_Altar_Tumladen",
         (ra_x1 - 6, ra_y1 - 6, ra_x2 + 6, ra_y2 + 6),
         (145, 110),
-        [(PlayerId.EIGHT, ENEMY_BALROG_BOSS_ID, 1, 145, 114), (PlayerId.FIVE, ENEMY_ORC_BRUTE_ID, 8, 145, 108)],
-        [(PlayerId.EIGHT, ENEMY_BALROG_BOSS_ID, 1, 148, 114)],
+        [(PlayerId.EIGHT, ENEMY_BALROG_BOSS_ID, 1, 142, 112), (PlayerId.FIVE, ENEMY_ORC_BRUTE_ID, 8, 142, 107)],
+        [(PlayerId.EIGHT, ENEMY_BALROG_BOSS_ID, 1, 149, 112)],
         trigger_player=PlayerId.ONE,
         trigger_unit_id=HERO_ROG_ID,
     )
